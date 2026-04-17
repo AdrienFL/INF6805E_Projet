@@ -1,0 +1,245 @@
+<?xml version="1.0" ?>
+<argos-configuration>
+
+  <framework>
+    <system threads="0"/>
+    <experiment length="0" ticks_per_second="10" random_seed="42"/>
+  </framework>
+
+  <controllers>
+    <buzz_controller_kheperaiv id="projet">
+      <actuators>
+        <differential_steering implementation="default" />
+        <leds                  implementation="default" medium="leds" />
+        <range_and_bearing     implementation="default" />
+      </actuators>
+      <sensors>
+        <kheperaiv_proximity implementation="default" show_rays="true" />
+        <range_and_bearing   implementation="medium" medium="rab"
+                             show_rays="false" noise_std_dev="0" />
+        <positioning         implementation="default" />
+        <kheperaiv_light      implementation="rot_z_only" show_rays="false" />
+      </sensors>
+        <params>
+        <wheel_turning hard_turn_angle_threshold="90"
+                       soft_turn_angle_threshold="70"
+                       no_turn_angle_threshold="10"
+                       max_speed="10" />
+      </params>
+    </buzz_controller_kheperaiv>
+  </controllers>
+
+  <arena size="10.0, 10.0, 1" center="0,0,0.5">
+    <box id="wall_n" size="10.0,0.1,0.5" movable="false">
+      <body position="0,5.0,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_s" size="10.0,0.1,0.5" movable="false">
+      <body position="0,-5.0,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_e" size="0.1,10.0,0.5" movable="false">
+      <body position="5.0,0,0" orientation="0,0,0"/>
+    </box>
+    <box id="wall_w" size="0.1,10.0,0.5" movable="false">
+      <body position="-5.0,0,0" orientation="0,0,0"/>
+    </box>
+
+        <box id="obs_0" size="0.32,0.17,0.5" movable="false">
+        <body position="1.255,-4.275,0" orientation="99.0,0,0"/>
+        </box>
+
+        <box id="obs_1" size="0.11,0.23,0.5" movable="false">
+        <body position="1.590,3.530,0" orientation="31.3,0,0"/>
+        </box>
+
+        <box id="obs_2" size="0.29,0.16,0.5" movable="false">
+        <body position="-2.532,0.048,0" orientation="9.6,0,0"/>
+        </box>
+
+        <box id="obs_3" size="0.10,0.34,0.5" movable="false">
+        <body position="0.404,-2.516,0" orientation="212.1,0,0"/>
+        </box>
+
+        <box id="obs_4" size="0.39,0.15,0.5" movable="false">
+        <body position="2.752,1.783,0" orientation="122.5,0,0"/>
+        </box>
+
+        <box id="obs_5" size="0.28,0.35,0.5" movable="false">
+        <body position="-1.471,-3.665,0" orientation="34.8,0,0"/>
+        </box>
+
+        <box id="obs_6" size="0.35,0.27,0.5" movable="false">
+        <body position="0.326,4.258,0" orientation="136.3,0,0"/>
+        </box>
+
+        <box id="obs_7" size="0.19,0.17,0.5" movable="false">
+        <body position="0.696,1.841,0" orientation="16.5,0,0"/>
+        </box>
+
+        <box id="obs_8" size="0.29,0.18,0.5" movable="false">
+        <body position="-3.782,-2.405,0" orientation="36.4,0,0"/>
+        </box>
+
+        <box id="obs_9" size="0.38,0.18,0.5" movable="false">
+        <body position="-1.217,-1.168,0" orientation="75.4,0,0"/>
+        </box>
+
+        <box id="obs_10" size="0.15,0.32,0.5" movable="false">
+        <body position="1.332,0.982,0" orientation="61.6,0,0"/>
+        </box>
+
+        <box id="obs_11" size="0.31,0.27,0.5" movable="false">
+        <body position="-1.085,4.406,0" orientation="230.4,0,0"/>
+        </box>
+
+        <box id="obs_12" size="0.19,0.11,0.5" movable="false">
+        <body position="3.086,2.484,0" orientation="82.5,0,0"/>
+        </box>
+
+        <box id="obs_13" size="0.19,0.36,0.5" movable="false">
+        <body position="-2.090,-2.601,0" orientation="339.4,0,0"/>
+        </box>
+
+        <box id="obs_14" size="0.18,0.24,0.5" movable="false">
+        <body position="1.399,-0.939,0" orientation="329.2,0,0"/>
+        </box>
+
+        <box id="obs_15" size="0.17,0.22,0.5" movable="false">
+        <body position="-2.135,0.761,0" orientation="323.2,0,0"/>
+        </box>
+
+        <box id="obs_16" size="0.13,0.11,0.5" movable="false">
+        <body position="4.478,0.086,0" orientation="32.7,0,0"/>
+        </box>
+
+        <box id="obs_17" size="0.21,0.12,0.5" movable="false">
+        <body position="1.147,2.629,0" orientation="152.0,0,0"/>
+        </box>
+
+        <box id="obs_18" size="0.30,0.32,0.5" movable="false">
+        <body position="4.240,3.247,0" orientation="4.1,0,0"/>
+        </box>
+
+        <box id="obs_19" size="0.39,0.24,0.5" movable="false">
+        <body position="1.269,-3.496,0" orientation="156.5,0,0"/>
+        </box>
+
+        <box id="obs_20" size="0.37,0.15,0.5" movable="false">
+        <body position="3.383,-2.129,0" orientation="180.2,0,0"/>
+        </box>
+
+        <box id="obs_21" size="0.26,0.33,0.5" movable="false">
+        <body position="-3.124,2.363,0" orientation="194.2,0,0"/>
+        </box>
+
+        <box id="obs_22" size="0.36,0.38,0.5" movable="false">
+        <body position="-4.495,-1.583,0" orientation="7.0,0,0"/>
+        </box>
+
+        <box id="obs_23" size="0.25,0.13,0.5" movable="false">
+        <body position="-3.979,3.402,0" orientation="340.9,0,0"/>
+        </box>
+
+        <box id="obs_24" size="0.24,0.14,0.5" movable="false">
+        <body position="-3.877,2.345,0" orientation="275.7,0,0"/>
+        </box>
+
+        <box id="obs_25" size="0.32,0.26,0.5" movable="false">
+        <body position="3.352,-0.692,0" orientation="76.2,0,0"/>
+        </box>
+
+        <box id="obs_26" size="0.23,0.29,0.5" movable="false">
+        <body position="-2.690,-1.695,0" orientation="358.3,0,0"/>
+        </box>
+
+        <box id="obs_27" size="0.28,0.20,0.5" movable="false">
+        <body position="0.158,-3.411,0" orientation="80.9,0,0"/>
+        </box>
+
+        <box id="obs_28" size="0.36,0.37,0.5" movable="false">
+        <body position="-3.861,1.180,0" orientation="82.4,0,0"/>
+        </box>
+
+        <box id="obs_29" size="0.27,0.38,0.5" movable="false">
+        <body position="1.521,-2.572,0" orientation="47.6,0,0"/>
+        </box>
+
+        <box id="obs_30" size="0.13,0.16,0.5" movable="false">
+        <body position="-0.246,2.562,0" orientation="290.7,0,0"/>
+        </box>
+
+        <box id="obs_31" size="0.30,0.32,0.5" movable="false">
+        <body position="-0.621,-0.688,0" orientation="168.1,0,0"/>
+        </box>
+
+        <box id="obs_32" size="0.36,0.20,0.5" movable="false">
+        <body position="4.357,-3.614,0" orientation="144.9,0,0"/>
+        </box>
+
+        <box id="obs_33" size="0.35,0.40,0.5" movable="false">
+        <body position="3.252,0.453,0" orientation="18.2,0,0"/>
+        </box>
+
+        <box id="obs_34" size="0.22,0.16,0.5" movable="false">
+        <body position="3.138,-3.003,0" orientation="174.8,0,0"/>
+        </box>
+
+        <box id="obs_35" size="0.34,0.18,0.5" movable="false">
+        <body position="-3.972,-1.089,0" orientation="354.7,0,0"/>
+        </box>
+
+        <box id="obs_36" size="0.15,0.32,0.5" movable="false">
+        <body position="4.116,4.459,0" orientation="200.1,0,0"/>
+        </box>
+
+        <box id="obs_37" size="0.32,0.26,0.5" movable="false">
+        <body position="-1.830,4.218,0" orientation="208.5,0,0"/>
+        </box>
+
+        <box id="obs_38" size="0.12,0.39,0.5" movable="false">
+        <body position="0.026,3.174,0" orientation="56.7,0,0"/>
+        </box>
+
+        <box id="obs_39" size="0.14,0.17,0.5" movable="false">
+        <body position="-2.828,0.855,0" orientation="243.1,0,0"/>
+        </box>
+
+            <light id="light_1"
+           position="-0.727,0.753,0.3"
+           orientation="0,0,0"
+           color="yellow"
+           intensity="0.3"
+           medium="leds" />
+
+       <distribute>
+      <position method="uniform" min="2,2,0" max="3,3,0" />
+      <orientation method="gaussian" mean="0,0,0" std_dev="360,0,0" />
+      <entity quantity="10" max_trials="100">
+        <kheperaiv id="kiv" rab_data_size="200" rab_range="6">
+          <controller config="projet" />
+        </kheperaiv>
+      </entity>
+    </distribute>
+
+  </arena>
+
+  <physics_engines>
+    <dynamics2d id="dyn2d"/>
+  </physics_engines>
+
+    <media>
+    <led id="leds"/>
+    <range_and_bearing id="rab" />
+    </media>
+
+    <visualization>
+    <qt-opengl>
+      <camera>
+        <placements>
+
+          <placement index="0" position="-80,0,70" look_at="1,0,0" up="1,0,0" lens_focal_length="500" />
+        </placements>
+      </camera>
+      <user_functions label="buzz_qt" />
+    </qt-opengl>
+  </visualization>
+</argos-configuration>
