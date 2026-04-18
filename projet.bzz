@@ -86,40 +86,39 @@ function repulsion_force() {
 
 
 function reynolds_force() {
-    var coh = math.vec2.new(0.0, 0.0)
-    var sep = math.vec2.new(0.0, 0.0)
+    var coh   = math.vec2.new(0.0, 0.0)
+    var sep   = math.vec2.new(0.0, 0.0)
     var count = 0
 
-    var yaw = pose.orientation.yaw
+    var nb_data = {}
+    neighbors.foreach(function(rid, data) {
+        nb_data[rid] = {.distance = data.distance, .azimuth = data.azimuth}
+    })
 
-    neighbors.listen("px", function(rid, val, data) {
-        var d = data.distance
-        var a = data.azimuth
-
-        if (d < SEP_DIST) {
-            var s = W_SEP * (SEP_DIST - d) / SEP_DIST
-            sep = math.vec2.add(sep, vec2.new(
-                -s * math.cos(a),
-                -s * math.sin(a)
-            ))
-        }
-
-        var dx_w = val - pose.position.x         
-        coh = math.vec2.add(coh, vec2.new(
-            dx_w * math.cos(yaw),
-            -dx_w * math.sin(yaw)
-        ))
-
+    neighbors.listen("px", function(rid, val, robot_id) {
+        var dx_w  = val - pose.position.x
+        var world = math.vec2.new(dx_w, 0.0)
+        log("world ", world)
+        log("orientation " , pose.orientation)
+        var body  = math.vec2.rotate(world, -pose.orientation.yaw)
+        coh = math.vec2.add(coh, body)
         count = count + 1
     })
 
-    neighbors.listen("py", function(rid, val, data) {
-        var dy_w = val - pose.position.y           
-        var yaw1  = pose.orientation.yaw
-        coh = math.vec2.add(coh, vec2.new(
-            dy_w * math.sin(yaw1),
-            dy_w * math.cos(yaw1)
-        ))
+    neighbors.listen("py", function(rid, val, robot_id) {
+        var dy_w  = val - pose.position.y
+        var world = math.vec2.new(0.0, dy_w)
+        log("world ", world)
+        log("orientation " , pose.orientation)
+        var body  = math.vec2.rotate(world, -pose.orientation.yaw)
+        coh = math.vec2.add(coh, body)
+    })
+
+    foreach(nb_data, function(rid, data) {
+        if (data.distance < SEP_DIST) {
+            var mag = W_SEP * (SEP_DIST - data.distance) / SEP_DIST
+            sep = math.vec2.add(sep, math.vec2.newp(-mag, data.azimuth))
+        }
     })
 
     if (count > 0) {
@@ -130,7 +129,6 @@ function reynolds_force() {
 }
 
 
-
 function apply_force(v) {
     if (math.vec2.length(v) < 0.001) {
         set_wheels(0.0, 0.0)
@@ -138,7 +136,7 @@ function apply_force(v) {
     }
 
     var angle = math.atan(v.y, v.x)
-    var speed = math.min(vec2.length(v), MAX_SPEED)
+    var speed = math.min(math.vec2.length(v), MAX_SPEED)
 
     var left  = speed * (1.0 - angle / math.pi)
     var right = speed * (1.0 + angle / math.pi)
