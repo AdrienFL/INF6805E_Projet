@@ -10,12 +10,15 @@ W_SEP = 2.5
 OBS_THRESH = 0.05  
 SEP_DIST = 0.5   
 GOAL_THRESH = 0.15  
-MAX_SPEED = 10.0  
+MAX_SPEED = 30.0  
 
 arrived = 0
 
+step_count = 0
+
 function init() {
     arrived = 0
+    step_count = 0
 }
 
 function reset() {
@@ -27,6 +30,9 @@ function destroy() {}
 
 
 function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y))
+    log(log_str)
 
     if (arrived == 1) {
         set_wheels(0.0, 0.0)
@@ -98,8 +104,8 @@ function reynolds_force() {
     neighbors.listen("px", function(rid, val, robot_id) {
         var dx_w  = val - pose.position.x
         var world = math.vec2.new(dx_w, 0.0)
-        log("world ", world)
-        log("orientation " , pose.orientation)
+        # log("world ", world)
+        # log("orientation " , pose.orientation)
         var body  = math.vec2.rotate(world, -pose.orientation.yaw)
         coh = math.vec2.add(coh, body)
         count = count + 1
@@ -108,8 +114,8 @@ function reynolds_force() {
     neighbors.listen("py", function(rid, val, robot_id) {
         var dy_w  = val - pose.position.y
         var world = math.vec2.new(0.0, dy_w)
-        log("world ", world)
-        log("orientation " , pose.orientation)
+        # log("world ", world)
+        # log("orientation " , pose.orientation)
         var body  = math.vec2.rotate(world, -pose.orientation.yaw)
         coh = math.vec2.add(coh, body)
     })
