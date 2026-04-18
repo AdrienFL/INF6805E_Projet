@@ -74,7 +74,7 @@ function repulsion_force() {
         var s = proximity[i]
         if (s.value > OBS_THRESH) {
             var mag = W_OBS * s.value * s.value
-            rep = math.vec2.add(rep, vec2.new(
+            rep = math.vec2.add(rep, math.vec2.new(
                 -mag * math.cos(s.angle),
                 -mag * math.sin(s.angle)
             ))
