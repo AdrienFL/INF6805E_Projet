@@ -1,18 +1,16 @@
 include "vec2.bzz"
 
 
-TARGET_X    = 3.0   
-TARGET_Y    = 0.0  
-
-W_ATT       = 1.5  
-W_OBS       = 5.0   
-W_COH       = 0.4  
-W_SEP       = 2.5   
-
-OBS_THRESH  = 0.05  
-SEP_DIST    = 0.5   
+TARGET_X = 3.0   
+TARGET_Y = 0.0  
+W_ATT= 1.5  
+W_OBS = 5.0   
+W_COH = 0.4  
+W_SEP = 2.5   
+OBS_THRESH = 0.05  
+SEP_DIST = 0.5   
 GOAL_THRESH = 0.15  
-MAX_SPEED   = 10.0  
+MAX_SPEED = 10.0  
 
 arrived = 0
 
@@ -30,14 +28,13 @@ function destroy() {}
 
 function step() {
 
-    if arrived == 1 {
+    if (arrived == 1) {
         set_wheels(0.0, 0.0)
         return
     }
 
     neighbors.broadcast("px", pose.position.x)
     neighbors.broadcast("py", pose.position.y)
-
     var f_att = attraction_force()
     var f_obs = repulsion_force()
     var f_rey = reynolds_force()
@@ -57,12 +54,10 @@ function attraction_force() {
     var dy_w = TARGET_Y - pose.position.y
     var dist = math.sqrt(dx_w * dx_w + dy_w * dy_w)
 
-    if dist < GOAL_THRESH {
+    if (dist < GOAL_THRESH) {
         arrived = 1
         return vec2.new(0.0, 0.0)
     }
-
-    # Rotate world-frame direction into robot body frame
     var yaw  = pose.orientation.yaw
     var dx_r =  dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
     var dy_r = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
@@ -76,9 +71,9 @@ function attraction_force() {
 function repulsion_force() {
     var rep = vec2.new(0.0, 0.0)
     var i = 0
-    while i < 8 {
+    while (i < 8) {
         var s = proximity[i]
-        if s.value > OBS_THRESH {
+        if (s.value > OBS_THRESH) {
             var mag = W_OBS * s.value * s.value
             rep = vec2.add(rep, vec2.new(
                 -mag * math.cos(s.angle),
@@ -99,11 +94,10 @@ function reynolds_force() {
     var yaw = pose.orientation.yaw
 
     neighbors.listen("px", function(rid, val, data) {
-        # Separation: use R&B distance/azimuth (already in body frame)
         var d = data.distance
         var a = data.azimuth
 
-        if d < SEP_DIST {
+        if (d < SEP_DIST) {
             var s = W_SEP * (SEP_DIST - d) / SEP_DIST
             sep = vec2.add(sep, vec2.new(
                 -s * math.cos(a),
@@ -111,10 +105,7 @@ function reynolds_force() {
             ))
         }
 
-        # Cohesion: use GPS position for accuracy
-        # Compute world-frame offset to neighbor, rotate into body frame
-        var dx_w = val - pose.position.x           # val = neighbor's px
-        # Note: py is received in a separate listen — see below
+        var dx_w = val - pose.position.x         
         coh = vec2.add(coh, vec2.new(
             dx_w * math.cos(yaw),
             -dx_w * math.sin(yaw)
@@ -124,15 +115,15 @@ function reynolds_force() {
     })
 
     neighbors.listen("py", function(rid, val, data) {
-        var dy_w = val - pose.position.y           # val = neighbor's py
-        var yaw  = pose.orientation.yaw
+        var dy_w = val - pose.position.y           
+        var yaw1  = pose.orientation.yaw
         coh = vec2.add(coh, vec2.new(
-            dy_w * math.sin(yaw),
-            dy_w * math.cos(yaw)
+            dy_w * math.sin(yaw1),
+            dy_w * math.cos(yaw1)
         ))
     })
 
-    if count > 0 {
+    if (count > 0) {
         coh = vec2.scale(coh, W_COH / count)
     }
 
@@ -142,7 +133,7 @@ function reynolds_force() {
 
 
 function apply_force(v) {
-    if vec2.length(v) < 0.001 {
+    if (vec2.length(v) < 0.001) {
         set_wheels(0.0, 0.0)
         return
     }
