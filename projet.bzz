@@ -39,7 +39,7 @@ function step() {
     var f_obs = repulsion_force()
     var f_rey = reynolds_force()
 
-    var total = vec2.new(
+    var total = math.vec2.new(
         f_att.x + f_obs.x + f_rey.x,
         f_att.y + f_obs.y + f_rey.y
     )
@@ -56,26 +56,25 @@ function attraction_force() {
 
     if (dist < GOAL_THRESH) {
         arrived = 1
-        return vec2.new(0.0, 0.0)
+        return math.vec2.new(0.0, 0.0)
     }
     var yaw  = pose.orientation.yaw
-    var dx_r =  dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
+    var cos_yaw = math.cos(yaw)
+    var sin_yaw = math.sin(yaw)
+    var dx_r = dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
     var dy_r = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
-
-    return vec2.new(
-        W_ATT * dx_r / dist,
-        W_ATT * dy_r / dist
-    )
+    
+    return math.vec2.new(W_ATT * dx_r / dist, W_ATT * dy_r / dist)
 }
 
 function repulsion_force() {
-    var rep = vec2.new(0.0, 0.0)
+    var rep = math.vec2.new(0.0, 0.0)
     var i = 0
     while (i < 8) {
         var s = proximity[i]
         if (s.value > OBS_THRESH) {
             var mag = W_OBS * s.value * s.value
-            rep = vec2.add(rep, vec2.new(
+            rep = math.vec2.add(rep, vec2.new(
                 -mag * math.cos(s.angle),
                 -mag * math.sin(s.angle)
             ))
@@ -87,8 +86,8 @@ function repulsion_force() {
 
 
 function reynolds_force() {
-    var coh   = vec2.new(0.0, 0.0)
-    var sep   = vec2.new(0.0, 0.0)
+    var coh = math.vec2.new(0.0, 0.0)
+    var sep = math.vec2.new(0.0, 0.0)
     var count = 0
 
     var yaw = pose.orientation.yaw
@@ -99,14 +98,14 @@ function reynolds_force() {
 
         if (d < SEP_DIST) {
             var s = W_SEP * (SEP_DIST - d) / SEP_DIST
-            sep = vec2.add(sep, vec2.new(
+            sep = math.vec2.add(sep, vec2.new(
                 -s * math.cos(a),
                 -s * math.sin(a)
             ))
         }
 
         var dx_w = val - pose.position.x         
-        coh = vec2.add(coh, vec2.new(
+        coh = math.vec2.add(coh, vec2.new(
             dx_w * math.cos(yaw),
             -dx_w * math.sin(yaw)
         ))
@@ -117,23 +116,23 @@ function reynolds_force() {
     neighbors.listen("py", function(rid, val, data) {
         var dy_w = val - pose.position.y           
         var yaw1  = pose.orientation.yaw
-        coh = vec2.add(coh, vec2.new(
+        coh = math.vec2.add(coh, vec2.new(
             dy_w * math.sin(yaw1),
             dy_w * math.cos(yaw1)
         ))
     })
 
     if (count > 0) {
-        coh = vec2.scale(coh, W_COH / count)
+        coh = math.vec2.scale(coh, W_COH / count)
     }
 
-    return vec2.add(coh, sep)
+    return math.vec2.add(coh, sep)
 }
 
 
 
 function apply_force(v) {
-    if (vec2.length(v) < 0.001) {
+    if (math.vec2.length(v) < 0.001) {
         set_wheels(0.0, 0.0)
         return
     }
