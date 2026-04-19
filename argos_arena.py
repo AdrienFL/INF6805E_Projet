@@ -71,10 +71,10 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
         if i == n_obstacles:
             lines.append(f'''
             <light id="light_1"
-           position="{ox:.3f},{oy:.3f},0.3"
+           position="4.5,-4.5,0.3"
            orientation="0,0,0"
            color="yellow"
-           intensity="0.3"
+           intensity="5"
            medium="leds" />''')
         else:
             angle = random.uniform(0, 360)
@@ -114,8 +114,7 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
     <qt-opengl>
       <camera>
         <placements>
-
-          <placement index="0" position="-80,0,70" look_at="1,0,0" up="1,0,0" lens_focal_length="500" />
+          <placement index="0" position="0,0,30" look_at="0,0,0" up="0,1,0" lens_focal_length="80" />
         </placements>
       </camera>
       <user_functions label="buzz_qt" />

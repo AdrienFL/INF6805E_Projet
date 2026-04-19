@@ -1,8 +1,7 @@
 include "vec2.bzz"
 
-
-TARGET_X = 3.0   
-TARGET_Y = 0.0  
+TARGET_X = 4.5 
+TARGET_Y = -4.5  
 W_ATT= 1.5  
 W_OBS = 5.0   
 W_COH = 0.4  
@@ -10,10 +9,9 @@ W_SEP = 2.5
 OBS_THRESH = 0.05  
 SEP_DIST = 0.5   
 GOAL_THRESH = 0.15  
-MAX_SPEED = 30.0  
+MAX_SPEED = 50.0  
 
 arrived = 0
-
 step_count = 0
 
 function init() {
@@ -27,20 +25,32 @@ function reset() {
 
 function destroy() {}
 
-
-
 function step() {
     step_count = step_count + 1
     var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y))
     log(log_str)
+
+    neighbors.broadcast("arrived", arrived)
+    neighbors.broadcast("px", pose.position.x)
+    neighbors.broadcast("py", pose.position.y)
 
     if (arrived == 1) {
         set_wheels(0.0, 0.0)
         return
     }
 
-    neighbors.broadcast("px", pose.position.x)
-    neighbors.broadcast("py", pose.position.y)
+    var nb_arrived = count_arrived_neighbors()
+    var nb_total   = 0
+    neighbors.foreach(function(rid, data) {
+        nb_total = nb_total + 1
+    })
+
+    if (nb_total > 0 and nb_arrived >= nb_total / 2) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+
     var f_att = attraction_force()
     var f_obs = repulsion_force()
     var f_rey = reynolds_force()
@@ -53,7 +63,15 @@ function step() {
     apply_force(total)
 }
 
-
+function count_arrived_neighbors() {
+    var n = 0
+    neighbors.listen("arrived", function(rid, val, robot_id) {
+        if (val == 1) {
+            n = n + 1
+        }
+    })
+    return n
+}
 
 function attraction_force() {
     var dx_w = TARGET_X - pose.position.x
@@ -62,13 +80,13 @@ function attraction_force() {
 
     if (dist < GOAL_THRESH) {
         arrived = 1
+        log("Arrived")
         return math.vec2.new(0.0, 0.0)
     }
-    var yaw  = pose.orientation.yaw
-    var cos_yaw = math.cos(yaw)
-    var sin_yaw = math.sin(yaw)
-    var dx_r = dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
-    var dy_r = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
+
+    var yaw     = pose.orientation.yaw
+    var dx_r    = dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
+    var dy_r    = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
     
     return math.vec2.new(W_ATT * dx_r / dist, W_ATT * dy_r / dist)
 }
@@ -90,7 +108,6 @@ function repulsion_force() {
     return rep
 }
 
-
 function reynolds_force() {
     var coh   = math.vec2.new(0.0, 0.0)
     var sep   = math.vec2.new(0.0, 0.0)
@@ -104,8 +121,6 @@ function reynolds_force() {
     neighbors.listen("px", function(rid, val, robot_id) {
         var dx_w  = val - pose.position.x
         var world = math.vec2.new(dx_w, 0.0)
-        # log("world ", world)
-        # log("orientation " , pose.orientation)
         var body  = math.vec2.rotate(world, -pose.orientation.yaw)
         coh = math.vec2.add(coh, body)
         count = count + 1
@@ -114,8 +129,6 @@ function reynolds_force() {
     neighbors.listen("py", function(rid, val, robot_id) {
         var dy_w  = val - pose.position.y
         var world = math.vec2.new(0.0, dy_w)
-        # log("world ", world)
-        # log("orientation " , pose.orientation)
         var body  = math.vec2.rotate(world, -pose.orientation.yaw)
         coh = math.vec2.add(coh, body)
     })
@@ -133,7 +146,6 @@ function reynolds_force() {
 
     return math.vec2.add(coh, sep)
 }
-
 
 function apply_force(v) {
     if (math.vec2.length(v) < 0.001) {

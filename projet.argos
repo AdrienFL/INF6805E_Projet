@@ -3,7 +3,7 @@
 
   <framework>
     <system threads="0"/>
-    <experiment length="120" ticks_per_second="10" random_seed="42"/>
+    <experiment length="0" ticks_per_second="10" random_seed="42"/>
   </framework>
 
   <controllers>
@@ -20,7 +20,7 @@
         <positioning         implementation="default" />
         <kheperaiv_light      implementation="rot_z_only" show_rays="false" />
       </sensors>
-        <params bytecode_file="PSO.bo" debug_file="PSO.bdb">
+        <params>
         <wheel_turning hard_turn_angle_threshold="90"
                        soft_turn_angle_threshold="70"
                        no_turn_angle_threshold="10"
@@ -204,7 +204,7 @@
         </box>
 
             <light id="light_1"
-           position="-0.727,0.753,0.3"
+           position="4.5,-4.5,0.3"
            orientation="0,0,0"
            color="yellow"
            intensity="5"
@@ -233,12 +233,6 @@
 
     <visualization>
     <qt-opengl>
-      <!-- <camera>
-        <placements>
-
-          <placement index="0" position="-80,0,70" look_at="1,0,0" up="1,0,0" lens_focal_length="500" />
-        </placements>
-      </camera> -->
       <camera>
         <placements>
           <placement index="0" position="0,0,30" look_at="0,0,0" up="0,1,0" lens_focal_length="80" />
