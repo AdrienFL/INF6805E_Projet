@@ -1,0 +1,187 @@
+include "vec2.bzz"
+
+# GWO parameters
+T_MAX        = 500    # steps pour la décroissance de a (2 -> 0.2)
+LIGHT_THRESH = 4.7
+MAX_SPEED    = 5.0
+
+# Top-3 leaders : alpha (meilleur), beta (2e), delta (3e)
+alpha_x = 0.0   alpha_y = 0.0   alpha_f = -1.0
+beta_x  = 0.0   beta_y  = 0.0   beta_f  = -1.0
+delta_x = 0.0   delta_y = 0.0   delta_f = -1.0
+
+step_count = 0
+arrived    = 0
+
+vel_x = 0.0
+vel_y = 0.0
+
+
+function sum_light(rid, data, accum) {
+    var lvec = math.vec2.newp(data.value, data.angle)
+    accum.vector = math.vec2.add(lvec, accum.vector)
+    if (data.value != 0) {
+        accum.number = accum.number + 1
+    }
+    accum.total = accum.total + data.value
+    return accum
+}
+
+function read_light() {
+    return reduce(light, sum_light, {
+        .number = 0,
+        .total  = 0.0,
+        .vector = math.vec2.new(0.0, 0.0)
+    })
+}
+
+
+function obstacle_avoidance() {
+    var repulsion = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var reading = proximity[i].value
+        if (reading > 0.0) {
+            var rvec = math.vec2.newp(reading, proximity[i].angle)
+            rvec = math.vec2.scale(rvec, -1.0)
+            repulsion = math.vec2.add(repulsion, rvec)
+        }
+        i = i + 1
+    }
+    return repulsion
+}
+
+
+# Insère le candidat (x, y, f) dans le top-3 si son fitness le mérite
+function update_leaders(x, y, f) {
+    if (f > alpha_f) {
+        delta_x = beta_x    delta_y = beta_y    delta_f = beta_f
+        beta_x  = alpha_x   beta_y  = alpha_y   beta_f  = alpha_f
+        alpha_x = x         alpha_y = y         alpha_f = f
+    } else if (f > beta_f) {
+        delta_x = beta_x    delta_y = beta_y    delta_f = beta_f
+        beta_x  = x         beta_y  = y         beta_f  = f
+    } else if (f > delta_f) {
+        delta_x = x         delta_y = y         delta_f = f
+    }
+}
+
+
+function init() {
+    arrived    = 0
+    step_count = 0
+    alpha_x = pose.position.x   alpha_y = pose.position.y   alpha_f = -1.0
+    beta_x  = pose.position.x   beta_y  = pose.position.y   beta_f  = -1.0
+    delta_x = pose.position.x   delta_y = pose.position.y   delta_f = -1.0
+}
+
+function reset() {
+    init()
+}
+
+function destroy() {}
+
+
+function step() {
+    if (arrived == 1) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    step_count = step_count + 1
+    var cx    = pose.position.x
+    var cy    = pose.position.y
+    var ldata = read_light()
+    var cf    = ldata.total
+
+    if (cf > LIGHT_THRESH) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    # --- Mise à jour du top-3 avec la position courante ---
+    update_leaders(cx, cy, cf)
+
+    # --- Diffusion de la position et fitness courantes ---
+    neighbors.broadcast("gx", cx)
+    neighbors.broadcast("gy", cy)
+    neighbors.broadcast("gf", cf)
+
+    # --- Collecte des positions voisines ---
+    var nb = {}
+    neighbors.listen("gf", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = val, .x = 0.0, .y = 0.0} }
+        else { nb[rid].f = val }
+    })
+    neighbors.listen("gx", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = -1.0, .x = val, .y = 0.0} }
+        else { nb[rid].x = val }
+    })
+    neighbors.listen("gy", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = -1.0, .x = 0.0, .y = val} }
+        else { nb[rid].y = val }
+    })
+
+    # --- Mise à jour du top-3 depuis les voisins ---
+    foreach(nb, function(rid, data) {
+        update_leaders(data.x, data.y, data.f)
+    })
+
+    # --- Mouvement ---
+    var motion = math.vec2.new(0.0, 0.0)
+    var avoid  = obstacle_avoidance()
+
+    if (math.vec2.length(ldata.vector) > 0.0) {
+        # Lumière visible : aller directement vers elle
+        var light_dir = math.vec2.norm(ldata.vector)
+        motion = math.vec2.add(
+            math.vec2.scale(light_dir, 1.0),
+            math.vec2.scale(avoid,     1.5)
+        )
+    } else {
+        # --- PHASE 1 : Personne n'a trouvé de lumière (Exploration libre) ---
+        if (alpha_f <= 0.0) {
+            # Marche aléatoire persistante (Patrouille)
+            if (math.rng.uniform(1.0) < 0.05) { # 5% de chance de changer de cap
+                vel_x = math.rng.uniform(-MAX_SPEED, MAX_SPEED)
+                vel_y = math.rng.uniform(-MAX_SPEED, MAX_SPEED)
+            }
+            var yaw = pose.orientation.yaw
+            var vx_b =  vel_x * math.cos(yaw) + vel_y * math.sin(yaw)
+            var vy_b = -vel_x * math.sin(yaw) + vel_y * math.cos(yaw)
+            motion = math.vec2.add(math.vec2.new(vx_b, vy_b), math.vec2.scale(avoid, 1.5))
+
+        } else {
+            # --- PHASE 2 : On a une piste (Logique GWO) ---
+            var a = 2.0 - step_count * 1.8 / T_MAX
+            if (a < 0.2) { a = 0.2 }
+
+            # Calcul simplifié de la direction vers la moyenne des leaders
+            # (On utilise des vecteurs plutôt que des abs() sur les coordonnées)
+            var to_alpha = math.vec2.sub(math.vec2.new(alpha_x, alpha_y), math.vec2.new(cx, cy))
+            var v_alpha = math.vec2.scale(to_alpha, (2.0 * a * math.rng.uniform(0.0, 1.0) - a))
+
+            var to_beta = math.vec2.sub(math.vec2.new(beta_x, beta_y), math.vec2.new(cx, cy))
+            var v_beta = math.vec2.scale(to_beta, (2.0 * a * math.rng.uniform(0.0, 1.0) - a))
+
+            var to_delta = math.vec2.sub(math.vec2.new(delta_x, delta_y), math.vec2.new(cx, cy))
+            var v_delta = math.vec2.scale(to_delta, (2.0 * a * math.rng.uniform(0.0, 1.0) - a))
+
+            # Direction moyenne
+            var avg_dir = math.vec2.scale(math.vec2.add(v_alpha, math.vec2.add(v_beta, v_delta)), 1.0/3.0)
+            
+            # Transformation vers le référentiel du robot
+            motion = math.vec2.add(math.vec2.rotate(avg_dir, -pose.orientation.yaw), math.vec2.scale(avoid, 1.5))
+        }
+    }
+
+    if (math.vec2.length(motion) > 0.0) {
+        motion = math.vec2.norm(motion)
+    }
+
+    set_wheels(
+        (motion.x - motion.y) * MAX_SPEED,
+        (motion.x + motion.y) * MAX_SPEED
+    )
+}
