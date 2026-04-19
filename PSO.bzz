@@ -139,29 +139,31 @@ function step() {
             math.vec2.scale(avoid,     1.5)
         )
     } else {
-        # Pas de light visible, on va en direction de la meilleur position connue
-        if (gbest_fitness > 0.0) {
-            # Si un voisin se rapproche de la lumière, alors il se rapproche
-            var to_gbest = math.vec2.sub(
-                math.vec2.new(gbest_x, gbest_y),
-                math.vec2.new(cx, cy)
-            )
-            motion = math.vec2.add(
-                math.vec2.rotate(to_gbest, -pose.orientation.yaw),
-                math.vec2.scale(avoid, 1.5)
-            )
-        } else {
-            # Personne n'a vu la lumière => Marche aléatoire
-            if (math.rng.uniform(1.0) < 0.05) { # Pourcentage de changer de direction
-                vel_x = math.rng.uniform(-MAX_VEL, MAX_VEL)
-                vel_y = math.rng.uniform(-MAX_VEL, MAX_VEL)
-            }
+        # Pas de lumière visible : PSO pur
+        # v = w*v + c1*r1*(pbest - pos) + c2*r2*(gbest - pos)
+        var r1x = math.rng.uniform(0.0, 1.0)
+        var r1y = math.rng.uniform(0.0, 1.0)
+        var r2x = math.rng.uniform(0.0, 1.0)
+        var r2y = math.rng.uniform(0.0, 1.0)
 
-            var yaw  = pose.orientation.yaw
-            var vx_b =  vel_x * math.cos(yaw) + vel_y * math.sin(yaw)
-            var vy_b = -vel_x * math.sin(yaw) + vel_y * math.cos(yaw)
-            motion = math.vec2.add(math.vec2.new(vx_b, vy_b), math.vec2.scale(avoid, 1.5))
+        vel_x = W_INERTIA * vel_x
+            + W_COGNITIVE * r1x * (pbest_x - cx)
+            + W_SOCIAL    * r2x * (gbest_x - cx)
+
+        vel_y = W_INERTIA * vel_y
+            + W_COGNITIVE * r1y * (pbest_y - cy)
+            + W_SOCIAL    * r2y * (gbest_y - cy)
+
+        var vmag = math.sqrt(vel_x * vel_x + vel_y * vel_y)
+        if (vmag > MAX_VEL) {
+            vel_x = vel_x * MAX_VEL / vmag
+            vel_y = vel_y * MAX_VEL / vmag
         }
+
+        var yaw  = pose.orientation.yaw
+        var vx_b =  vel_x * math.cos(yaw) + vel_y * math.sin(yaw)
+        var vy_b = -vel_x * math.sin(yaw) + vel_y * math.cos(yaw)
+        motion = math.vec2.add(math.vec2.new(vx_b, vy_b), math.vec2.scale(avoid, 1.5))
     }
 
     if (math.vec2.length(motion) > 0.0) {
