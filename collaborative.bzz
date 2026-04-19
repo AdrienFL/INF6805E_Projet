@@ -1,0 +1,167 @@
+include "vec2.bzz"
+
+W_ATT = 1.5
+W_OBS = 5.0
+W_EXP = 20.0
+OBS_THRESH = 0.05
+GOAL_THRESH = 0.2
+MAX_SPEED = 50.0
+
+STATE_EXPLORE = 0
+STATE_MERGE = 1
+STATE_NAVIGATE = 2
+
+step_count = 0
+state = STATE_EXPLORE
+map_stig = nil
+
+my_target_x = 0.0
+my_target_y = 0.0
+target_found = 0
+
+merge_x = 0.0
+merge_y = 0.0
+
+function init() {
+    step_count = 0
+    state = STATE_EXPLORE
+    target_found = 0
+    map_stig = stigmergy.create(1)
+    
+    my_target_x = id * 2.0
+    my_target_y = id * -2.0
+    
+    neighbors.listen("target_found", function(vid, value, rid) {
+        if (value.target_id == id and state == STATE_EXPLORE) {
+            state = STATE_MERGE
+            merge_x = value.x
+            merge_y = value.y
+        }
+    })
+}
+
+function reset() {
+    step_count = 0
+    state = STATE_EXPLORE
+    target_found = 0
+}
+
+function destroy() {}
+
+function update_map() {
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var obs_x = pose.position.x + math.cos(pose.orientation.yaw + s.angle) * s.value
+            var obs_y = pose.position.y + math.sin(pose.orientation.yaw + s.angle) * s.value
+            
+            var kx = math.round(obs_x * 10.0) / 10.0
+            var ky = math.round(obs_y * 10.0) / 10.0
+            var key_str = string.concat(string.tostring(kx), "_", string.tostring(ky))
+            
+            if (map_stig.get(key_str) != 1) {
+                map_stig.put(key_str, 1)
+                var key_vec_str = string.concat(string.tostring(kx), ":", string.tostring(ky))
+                log(string.concat("MAP,", string.tostring(step_count), ",", key_vec_str, ",1"))
+            }
+        }
+        i = i + 1
+    }
+}
+
+function check_targets() {
+    var nb_data = {}
+    neighbors.foreach(function(rid, data) {
+        nb_data[rid] = data
+    })
+    
+    var expected_target_x = 1.0
+    var expected_target_y = -1.0
+    
+    var dist = math.sqrt((expected_target_x - pose.position.x)^2 + (expected_target_y - pose.position.y)^2)
+    if (dist < 1.0) {
+        var payload = {.target_id = 1, .x = pose.position.x, .y = pose.position.y}
+        neighbors.broadcast("target_found", payload)
+    }
+    
+    var my_dist = math.sqrt((my_target_x - pose.position.x)^2 + (my_target_y - pose.position.y)^2)
+    if (my_dist < 1.0 and target_found == 0) {
+        target_found = 1
+        state = STATE_NAVIGATE
+    }
+}
+
+function calc_repulsion() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var mag = W_OBS * s.value * s.value
+            rep = math.vec2.add(rep, math.vec2.new(-mag * math.cos(s.angle), -mag * math.sin(s.angle)))
+        }
+        i = i + 1
+    }
+    return rep
+}
+
+function calc_attraction(tx, ty, weight) {
+    var dx = tx - pose.position.x
+    var dy = ty - pose.position.y
+    var dist = math.sqrt(dx * dx + dy * dy)
+    
+    if (dist < GOAL_THRESH) {
+        return math.vec2.new(0.0, 0.0)
+    }
+    
+    var yaw = pose.orientation.yaw
+    var dx_r = dx * math.cos(yaw) + dy * math.sin(yaw)
+    var dy_r = -dx * math.sin(yaw) + dy * math.cos(yaw)
+    
+    return math.vec2.new(weight * dx_r / dist, weight * dy_r / dist)
+}
+
+function calc_exploration() {
+    return math.vec2.new(W_EXP, 0.0)
+}
+
+function apply_force(v) {
+    if (math.vec2.length(v) < 0.001) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var angle = math.atan(v.y, v.x)
+    var speed = math.min(math.vec2.length(v), MAX_SPEED)
+
+    var left  = speed * (1.0 - angle / math.pi)
+    var right = speed * (1.0 + angle / math.pi)
+
+    left  = math.min(math.max(left,  -MAX_SPEED), MAX_SPEED)
+    right = math.min(math.max(right, -MAX_SPEED), MAX_SPEED)
+
+    set_wheels(left, right)
+}
+
+function step() {
+    step_count = step_count + 1
+    
+    update_map()
+    check_targets()
+    
+    var f_rep = calc_repulsion()
+    var f_att = math.vec2.new(0.0, 0.0)
+    var f_exp = math.vec2.new(0.0, 0.0)
+    
+    if (state == STATE_EXPLORE) {
+        f_exp = calc_exploration()
+    } else if (state == STATE_MERGE) {
+        f_att = calc_attraction(merge_x, merge_y, W_ATT)
+    } else if (state == STATE_NAVIGATE) {
+        f_att = calc_attraction(my_target_x, my_target_y, W_ATT)
+    }
+    
+    var total = math.vec2.new(f_rep.x + f_att.x + f_exp.x, f_rep.y + f_att.y + f_exp.y)
+    apply_force(total)
+}

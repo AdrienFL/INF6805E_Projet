@@ -3,7 +3,7 @@
 
   <framework>
     <system threads="0"/>
-    <experiment length="10000" ticks_per_second="10" random_seed="42"/>
+    <experiment length="500" ticks_per_second="10" random_seed="42"/>
   </framework>
 
   <controllers>
@@ -20,7 +20,7 @@
         <positioning         implementation="default" />
         <kheperaiv_light      implementation="rot_z_only" show_rays="false" />
       </sensors>
-        <params bytecode_file="flood_fill.bo" debug_file="flood_fill.bdb">
+        <params bytecode_file="coverage.bo" debug_file="coverage.bdb">
         <wheel_turning hard_turn_angle_threshold="90"
                        soft_turn_angle_threshold="70"
                        no_turn_angle_threshold="10"

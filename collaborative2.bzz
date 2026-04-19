@@ -1,0 +1,154 @@
+include "vec2.bzz"
+
+TARGET_X = 15.0
+TARGET_Y = 15.0
+W_ATT = 2.0
+W_OBS = 4.0
+OBS_THRESH = 0.05
+MAX_SPEED = 50.0
+
+STATE_EXPLORE = 0
+STATE_NAVIGATE = 1
+
+step_count = 0
+state = STATE_EXPLORE
+map_stig = nil
+claim_stig = nil
+
+my_front_x = 0.0
+my_front_y = 0.0
+
+function init() {
+    step_count = 0
+    state = STATE_EXPLORE
+    map_stig = stigmergy.create(1)
+    claim_stig = stigmergy.create(2)
+    pick_new_frontier()
+}
+
+function reset() {
+    state = STATE_EXPLORE
+}
+
+function destroy() {}
+
+function update_map() {
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var ox = pose.position.x + math.cos(pose.orientation.yaw + s.angle) * s.value
+            var oy = pose.position.y + math.sin(pose.orientation.yaw + s.angle) * s.value
+            var kx = math.round(ox * 5.0) / 5.0
+            var ky = math.round(oy * 5.0) / 5.0
+            var key = string.concat(string.tostring(kx), "_", string.tostring(ky))
+            
+            if (map_stig.get(key) != 1) {
+                map_stig.put(key, 1)
+                log(string.concat("MAP,", string.tostring(step_count), ",", string.tostring(kx), ":", string.tostring(ky), ",1"))
+            }
+        }
+        i = i + 1
+    }
+}
+
+function pick_new_frontier() {
+    var best_score = -1000000.0
+    var best_x = pose.position.x
+    var best_y = pose.position.y
+    var a = 0
+    
+    while(a < 8) {
+        var ang = a * math.pi / 4.0
+        var cx = pose.position.x + 2.0 * math.cos(ang)
+        var cy = pose.position.y + 2.0 * math.sin(ang)
+        
+        var d_goal = math.sqrt((TARGET_X - cx)^2 + (TARGET_Y - cy)^2)
+        var score = -d_goal
+        
+        if (score > best_score) {
+            best_score = score
+            best_x = cx
+            best_y = cy
+        }
+        a = a + 1
+    }
+    
+    my_front_x = best_x
+    my_front_y = best_y
+    claim_stig.put(string.tostring(id), string.concat(string.tostring(best_x), "_", string.tostring(best_y)))
+}
+
+function check_state() {
+    var dist_front = math.sqrt((my_front_x - pose.position.x)^2 + (my_front_y - pose.position.y)^2)
+    if (dist_front < 0.5) {
+        pick_new_frontier()
+    }
+    
+    var dist_target = math.sqrt((TARGET_X - pose.position.x)^2 + (TARGET_Y - pose.position.y)^2)
+    if (dist_target < 1.0) {
+        state = STATE_NAVIGATE
+    }
+}
+
+function calc_repulsion() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var mag = W_OBS * s.value * s.value
+            rep = math.vec2.add(rep, math.vec2.new(-mag * math.cos(s.angle), -mag * math.sin(s.angle)))
+        }
+        i = i + 1
+    }
+    return rep
+}
+
+function calc_attraction(tx, ty) {
+    var dx = tx - pose.position.x
+    var dy = ty - pose.position.y
+    var dist = math.sqrt(dx * dx + dy * dy)
+    
+    if (dist < 0.2) {
+        return math.vec2.new(0.0, 0.0)
+    }
+    
+    var yaw = pose.orientation.yaw
+    var dx_r = dx * math.cos(yaw) + dy * math.sin(yaw)
+    var dy_r = -dx * math.sin(yaw) + dy * math.cos(yaw)
+    return math.vec2.new(W_ATT * dx_r / dist, W_ATT * dy_r / dist)
+}
+
+function apply_force(v) {
+    if (math.vec2.length(v) < 0.001) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+    var angle = math.atan(v.y, v.x)
+    var speed = math.min(math.vec2.length(v), MAX_SPEED)
+    var left = speed * (1.0 - angle / math.pi)
+    var right = speed * (1.0 + angle / math.pi)
+    
+    left = math.min(math.max(left, -MAX_SPEED), MAX_SPEED)
+    right = math.min(math.max(right, -MAX_SPEED), MAX_SPEED)
+    set_wheels(left, right)
+}
+
+function step() {
+    step_count = step_count + 1
+    update_map()
+    check_state()
+    
+    var f_rep = calc_repulsion()
+    var f_att = math.vec2.new(0.0, 0.0)
+    
+    if (state == STATE_EXPLORE) {
+        f_att = calc_attraction(my_front_x, my_front_y)
+    } else {
+        f_att = calc_attraction(TARGET_X, TARGET_Y)
+    }
+    
+    var total = math.vec2.new(f_rep.x + f_att.x, f_rep.y + f_att.y)
+    apply_force(total)
+}
