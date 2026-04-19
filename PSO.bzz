@@ -19,6 +19,8 @@ gbest_y       = 0.0
 gbest_fitness = 0.0
 arrived       = 0
 
+step_count = 0
+
 
 function sum_light(rid, data, accum) {
     var lvec = math.vec2.newp(data.value, data.angle)
@@ -69,12 +71,17 @@ function init() {
 
 function reset() {
     init()
+    step_count = 0
 }
 
 function destroy() {}
 
 
 function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y), ",", string.tostring(arrived))
+    log(log_str)
+
     if (arrived == 1) {
         set_wheels(0.0, 0.0)
         return

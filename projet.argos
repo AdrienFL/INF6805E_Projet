@@ -20,7 +20,7 @@
         <positioning         implementation="default" />
         <kheperaiv_light      implementation="rot_z_only" show_rays="false" />
       </sensors>
-        <params bytecode_file="projet.bo" debug_file="projet.bdb">
+        <params bytecode_file="PSO.bo" debug_file="PSO.bdb">
         <wheel_turning hard_turn_angle_threshold="90"
                        soft_turn_angle_threshold="70"
                        no_turn_angle_threshold="10"
