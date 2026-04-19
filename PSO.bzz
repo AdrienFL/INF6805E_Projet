@@ -2,7 +2,7 @@ include "vec2.bzz"
 
 # Paramètres PSO
 W_INERTIA    = 0.7
-W_COGNITIVE  = 1.5
+W_COGNITIVE  = 10.5
 W_SOCIAL     = 2.5
 LIGHT_THRESH = 2      
 MAX_SPEED    = 5.0
@@ -64,8 +64,8 @@ function init() {
     pbest_x       = pose.position.x
     pbest_y       = pose.position.y
     pbest_fitness = -1.0
-    gbest_x       = pbest_x
-    gbest_y       = pbest_y
+    gbest_x       = 4.5
+    gbest_y       = -4.5
     gbest_fitness = 0.0
 }
 
@@ -124,14 +124,14 @@ function step() {
 
     if (pbest_fitness > gbest_fitness) {
         gbest_fitness = pbest_fitness
-        gbest_x = pbest_x
-        gbest_y = pbest_y
+        # gbest_x = pbest_x
+        # gbest_y = pbest_y
     }
     foreach(nb, function(rid, data) {
         if (data.f > gbest_fitness) {
             gbest_fitness = data.f
-            gbest_x = data.x
-            gbest_y = data.y
+            # gbest_x = data.x
+            # gbest_y = data.y
         }
     })
 

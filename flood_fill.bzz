@@ -1,0 +1,218 @@
+include "vec2.bzz"
+
+MAX_SPEED = 20.0
+GRID_RES = 0.15
+PROX_RANGE = 0.15
+OBSTACLE_AVOID_GAIN = 2.0
+ROBOT_AVOID_DIST = 0.3
+
+map_stig = nil
+cost_stig = nil
+pos_stig = nil
+step_count = 0
+arrived = 0
+
+GLOBAL_TARGET_X = 4.5
+GLOBAL_TARGET_Y = -4.5
+
+function get_grid_key(x, y) {
+    return string.concat(string.tostring(math.round(x / GRID_RES)), ",", 
+                         string.tostring(math.round(y / GRID_RES)))
+}
+
+function get_cost(nx, ny) {
+    var key = get_grid_key(nx, ny)
+    if(map_stig.get(key) == 2) { 
+        return 9999 
+    }
+    
+    var c = cost_stig.get(key)
+    if(c != nil) { 
+        return c 
+    }
+    
+    var dx = math.round(math.abs(nx - GLOBAL_TARGET_X) / GRID_RES)
+    var dy = math.round(math.abs(ny - GLOBAL_TARGET_Y) / GRID_RES)
+    return dx + dy
+}
+
+function obstacle_avoidance() {
+    var repulsion = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var reading = proximity[i].value
+        if (reading > 0.0) {
+            var rvec = math.vec2.newp(reading, proximity[i].angle)
+            rvec = math.vec2.scale(rvec, -1.0)
+            repulsion = math.vec2.add(repulsion, rvec)
+        }
+        i = i + 1
+    }
+    return repulsion
+}
+
+function robot_repulsion() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var cx = pose.position.x
+    var cy = pose.position.y
+    
+    pos_stig.foreach(function(key, data, robot_id) {
+        if(robot_id != id) {
+            var dx = cx - data.x
+            var dy = cy - data.y
+            var dist = math.sqrt(dx*dx + dy*dy)
+            
+            if(dist < ROBOT_AVOID_DIST and dist > 0.01) {
+                var strength = (ROBOT_AVOID_DIST - dist) / ROBOT_AVOID_DIST
+                rep = math.vec2.add(rep, math.vec2.new(dx * strength, dy * strength))
+            }
+        }
+    })
+    return rep
+}
+
+function init() {
+    map_stig = stigmergy.create(1)
+    cost_stig = stigmergy.create(2)
+    pos_stig = stigmergy.create(3)
+    step_count = 0
+    arrived = 0
+}
+
+function reset() {
+    init()
+}
+
+function destroy() {}
+
+function update_map(key, val) {
+    var current = map_stig.get(key)
+    if(current != val) {
+        map_stig.put(key, val)
+        log(string.concat("MAP,", string.tostring(step_count), ",", key, ",", string.tostring(val)))
+    }
+}
+
+function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y), ",", string.tostring(arrived))
+    log(log_str)
+
+    
+    var cx = pose.position.x
+    var cy = pose.position.y
+    var yaw = pose.orientation.yaw
+    var my_key = get_grid_key(cx, cy)
+    
+    pos_stig.put(string.tostring(id), { .x = cx, .y = cy })
+    update_map(my_key, 1)
+    
+    var p = 0
+    while(p < 8) {
+        if(proximity[p].value > 0.1) {
+            var actual_dist = PROX_RANGE * (1.0 - proximity[p].value)
+            if(actual_dist < 0.02) { actual_dist = 0.02 }
+            
+            var ox = cx + math.cos(yaw + proximity[p].angle) * actual_dist
+            var oy = cy + math.sin(yaw + proximity[p].angle) * actual_dist
+            var obs_key = get_grid_key(ox, oy)
+            
+            if(map_stig.get(obs_key) != 1) {
+                var is_robot = 0
+                pos_stig.foreach(function(key, data, robot_id) {
+                    if(is_robot == 0 and robot_id != id) {
+                        var dist = math.sqrt((data.x - ox)*(data.x - ox) + 
+                                           (data.y - oy)*(data.y - oy))
+                        if(dist < 0.25) { 
+                            is_robot = 1 
+                        }
+                    }
+                })
+                
+                if(is_robot == 0) {
+                    update_map(obs_key, 2)
+                    cost_stig.put(obs_key, 9999)
+                }
+            }
+        }
+        p = p + 1
+    }
+    
+    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - cx)*(GLOBAL_TARGET_X - cx) + 
+                               (GLOBAL_TARGET_Y - cy)*(GLOBAL_TARGET_Y - cy))
+    if(dist_to_goal < GRID_RES * 2) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+    
+    var neighbors = {}
+    neighbors[0] = { .x = cx + GRID_RES, .y = cy }
+    neighbors[1] = { .x = cx - GRID_RES, .y = cy }
+    neighbors[2] = { .x = cx, .y = cy + GRID_RES }
+    neighbors[3] = { .x = cx, .y = cy - GRID_RES }
+    
+    var min_cost = 9999
+    var best_nx = cx
+    var best_ny = cy
+    var walls = 0
+    
+    var k = 0
+    while(k < 4) {
+        var c = get_cost(neighbors[k].x, neighbors[k].y)
+        
+        if(c >= 9999) {
+            walls = walls + 1
+        } else {
+            pos_stig.foreach(function(r_key, r_data, robot_id) {
+                if(robot_id != id) {
+                    var dx = neighbors[k].x - r_data.x
+                    var dy = neighbors[k].y - r_data.y
+                    if(math.sqrt(dx*dx + dy*dy) < GRID_RES * 2.0) {
+                        c = c + 4
+                    }
+                }
+            })
+        }
+        
+        if(c < min_cost) {
+            min_cost = c
+            best_nx = neighbors[k].x
+            best_ny = neighbors[k].y
+        }
+        k = k + 1
+    }
+    
+    var expected_cost = min_cost + 1
+    var current_cost = get_cost(cx, cy)
+    
+    if(walls >= 3) {
+        cost_stig.put(my_key, 9999)
+        update_map(my_key, 2)
+    } else if(current_cost < expected_cost) {
+        cost_stig.put(my_key, expected_cost)
+    }
+    
+    var goal_direction = math.vec2.new(0.0, 0.0)
+    if(min_cost < 9999) {
+        var angle_to_target = math.atan(best_ny - cy, best_nx - cx) - yaw
+        goal_direction = math.vec2.newp(1.0, angle_to_target)
+    }
+    
+    var avoid = obstacle_avoidance()
+    var robot_rep = robot_repulsion()
+    
+    var motion = math.vec2.new(0.0, 0.0)
+    motion = math.vec2.add(motion, goal_direction)
+    motion = math.vec2.add(motion, math.vec2.scale(avoid, OBSTACLE_AVOID_GAIN))
+    motion = math.vec2.add(motion, math.vec2.scale(robot_rep, 1.0))
+    
+    if(math.vec2.length(motion) > 0.0) {
+        motion = math.vec2.norm(motion)
+    }
+    
+    set_wheels(
+        (motion.x - motion.y) * MAX_SPEED,
+        (motion.x + motion.y) * MAX_SPEED
+    )
+}

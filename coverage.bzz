@@ -1,0 +1,276 @@
+include "vec2.bzz"
+
+MAX_SPEED = 20.0
+GRID_RES = 0.15
+PROX_RANGE = 0.15
+
+
+FRONTIER_WEIGHT = 0.3      
+GOAL_WEIGHT = 2.0          
+OBSTACLE_AVOID_GAIN = 2.0  
+ROBOT_AVOID_DIST = 0.3     
+
+map_stig = nil
+target_stig = nil
+pos_stig = nil
+state = 0
+target_x = 0.0
+target_y = 0.0
+step_count = 0
+arrived = 0
+
+GLOBAL_TARGET_X = 4.5
+GLOBAL_TARGET_Y = -4.5
+
+
+function obstacle_avoidance() {
+    var repulsion = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var reading = proximity[i].value
+        if (reading > 0.0) {
+            
+            var rvec = math.vec2.newp(reading, proximity[i].angle)
+            rvec = math.vec2.scale(rvec, -1.0)
+            repulsion = math.vec2.add(repulsion, rvec)
+        }
+        i = i + 1
+    }
+    return repulsion
+}
+
+
+function robot_repulsion() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var cx = pose.position.x
+    var cy = pose.position.y
+    
+    pos_stig.foreach(function(key, data, robot_id) {
+        if(robot_id != id) {
+            var dx = cx - data.x
+            var dy = cy - data.y
+            var dist = math.sqrt(dx*dx + dy*dy)
+            
+            
+            if(dist < ROBOT_AVOID_DIST and dist > 0.01) {
+                var strength = (ROBOT_AVOID_DIST - dist) / ROBOT_AVOID_DIST
+                rep = math.vec2.add(rep, math.vec2.new(dx * strength, dy * strength))
+            }
+        }
+    })
+    return rep
+}
+
+
+function find_closest_frontier(cx, cy) {
+    var best_frontier = nil
+    var min_cost = 99999.0
+    var r = 2
+    
+    
+    while(r <= 20) {
+        var theta = 0.0
+        while(theta < 6.28) {
+            var fx = cx + r * GRID_RES * math.cos(theta)
+            var fy = cy + r * GRID_RES * math.sin(theta)
+            var key = get_grid_key(fx, fy)
+            
+            
+            if(map_stig.get(key) == nil) {
+                var claimed = target_stig.get(key)
+                
+                
+                if(claimed == nil or claimed == id) {
+                    
+                    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - fx)*(GLOBAL_TARGET_X - fx) + 
+                                                  (GLOBAL_TARGET_Y - fy)*(GLOBAL_TARGET_Y - fy))
+                    
+                    
+                    var dist_to_frontier = r * GRID_RES
+                    
+                    
+                    if(check_los(cx, cy, fx, fy) == 1) {
+                        
+                        
+                        var cost = (dist_to_frontier * FRONTIER_WEIGHT) + (dist_to_goal * GOAL_WEIGHT)
+                        
+                        if(cost < min_cost) {
+                            min_cost = cost
+                            best_frontier = { .x = fx, .y = fy, .key = key }
+                        }
+                    }
+                }
+            }
+            theta = theta + 0.785
+        }
+        r = r + 2
+    }
+    
+    
+    if(best_frontier != nil) {
+        target_stig.put(best_frontier.key, id)
+        return best_frontier
+    }
+    return nil
+}
+
+function get_grid_key(x, y) {
+    return string.concat(string.tostring(math.round(x / GRID_RES)), ",", 
+                         string.tostring(math.round(y / GRID_RES)))
+}
+
+
+function check_los(x1, y1, x2, y2) {
+    var dist = math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+    var steps = math.ceil(dist / GRID_RES)
+    var i = 1
+    while(i <= steps) {
+        var px = x1 + (x2-x1) * (i/steps)
+        var py = y1 + (y2-y1) * (i/steps)
+        if(map_stig.get(get_grid_key(px, py)) == 2) {
+            return 0
+        }
+        i = i + 1
+    }
+    return 1
+}
+
+function init() {
+    map_stig = stigmergy.create(1)
+    target_stig = stigmergy.create(2)
+    pos_stig = stigmergy.create(3)
+    state = 0
+    step_count = 0
+    arrived = 0
+}
+
+function reset() {
+    init()
+}
+
+function destroy() {}
+
+function log_map() {
+    if(id == 0 and step_count % 10 == 0) {
+        map_stig.foreach(function(key, data, robot_id) {
+            log(string.concat("MAP,", string.tostring(step_count), ",", key, ",", 
+                            string.tostring(data)))
+        })
+    }
+}
+
+function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y), ",", string.tostring(arrived))
+    # log(log_str)
+
+    
+    var cx = pose.position.x
+    var cy = pose.position.y
+    var yaw = pose.orientation.yaw
+    
+    
+    pos_stig.put(string.tostring(id), { .x = cx, .y = cy })
+    map_stig.put(get_grid_key(cx, cy), 1)
+    
+    
+    var p = 0
+    while(p < 8) {
+        if(proximity[p].value > 0.1) {
+            var actual_dist = PROX_RANGE * (1.0 - proximity[p].value)
+            if(actual_dist < 0.02) { actual_dist = 0.02 }
+            
+            var ox = cx + math.cos(yaw + proximity[p].angle) * actual_dist
+            var oy = cy + math.sin(yaw + proximity[p].angle) * actual_dist
+            var obs_key = get_grid_key(ox, oy)
+            
+            if(map_stig.get(obs_key) != 1) {
+                
+                var is_robot = 0
+                pos_stig.foreach(function(key, data, robot_id) {
+                    if(is_robot == 0 and robot_id != id) {
+                        var dist = math.sqrt((data.x - ox)*(data.x - ox) + 
+                                           (data.y - oy)*(data.y - oy))
+                        if(dist < 0.25) { 
+                            is_robot = 1 
+                        }
+                    }
+                })
+                
+                if(is_robot == 0) {
+                    map_stig.put(obs_key, 2)  
+                }
+            }
+        }
+        p = p + 1
+    }
+    
+    
+    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - cx)*(GLOBAL_TARGET_X - cx) + 
+                                  (GLOBAL_TARGET_Y - cy)*(GLOBAL_TARGET_Y - cy))
+    if(dist_to_goal < GRID_RES * 2) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+    
+    
+    var motion = math.vec2.new(0.0, 0.0)
+    var goal_direction = math.vec2.new(0.0, 0.0)
+    
+    
+    if(state == 1) {
+        
+        var target_key = get_grid_key(target_x, target_y)
+        var dist = math.sqrt((target_x - cx)*(target_x - cx) + (target_y - cy)*(target_y - cy))
+        
+        if(dist < GRID_RES or map_stig.get(target_key) != nil) {
+            
+            state = 0
+            target_stig.put(target_key, nil)
+        } else {
+            
+            var angle_to_target = math.atan(target_y - cy, target_x - cx) - yaw
+            goal_direction = math.vec2.newp(1.0, angle_to_target)
+        }
+    }
+    
+    if(state == 0) {
+        
+        var front = find_closest_frontier(cx, cy)
+        if(front != nil) {
+            state = 1
+            target_x = front.x
+            target_y = front.y
+        } else {
+            
+            var angle_to_goal = math.atan(GLOBAL_TARGET_Y - cy, GLOBAL_TARGET_X - cx) - yaw
+            goal_direction = math.vec2.newp(1.0, angle_to_goal)
+            state = 1
+            target_x = GLOBAL_TARGET_X
+            target_y = GLOBAL_TARGET_Y
+        }
+    }
+    
+    
+    var avoid = obstacle_avoidance()
+    var robot_rep = robot_repulsion()
+    
+    
+    motion = math.vec2.add(motion, goal_direction)
+    motion = math.vec2.add(motion, math.vec2.scale(avoid, OBSTACLE_AVOID_GAIN))
+    motion = math.vec2.add(motion, math.vec2.scale(robot_rep, 1.0))
+    
+    
+    if(math.vec2.length(motion) > 0.0) {
+        motion = math.vec2.norm(motion)
+    }
+    
+    
+    set_wheels(
+        (motion.x - motion.y) * MAX_SPEED,
+        (motion.x + motion.y) * MAX_SPEED
+    )
+    
+    log_map()
+}
