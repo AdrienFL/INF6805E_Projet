@@ -1,12 +1,12 @@
 include "vec2.bzz"
 
 MAX_SPEED = 20.0
-GRID_RES = 0.15
-PROX_RANGE = 0.15
+GRID_RES = 0.3
+PROX_RANGE = 0.5
 
-FRONTIER_WEIGHT = 0.3      
-GOAL_WEIGHT = 2.0          
-OBSTACLE_AVOID_GAIN = 2.0  
+FRONTIER_WEIGHT = 1.0
+GOAL_WEIGHT = 1.0
+OBSTACLE_AVOID_GAIN = 2.0
 ROBOT_AVOID_DIST = 0.3     
 
 map_stig = nil
@@ -29,6 +29,10 @@ function obstacle_avoidance() {
         if (reading > 0.0) {
             var rvec = math.vec2.newp(reading, proximity[i].angle)
             rvec = math.vec2.scale(rvec, -1.0)
+            
+            var perp = math.vec2.new(-rvec.y, rvec.x)
+            rvec = math.vec2.add(rvec, math.vec2.scale(perp, 0.75))
+            
             repulsion = math.vec2.add(repulsion, rvec)
         }
         i = i + 1
@@ -40,15 +44,19 @@ function robot_repulsion() {
     var rep = math.vec2.new(0.0, 0.0)
     var cx = pose.position.x
     var cy = pose.position.y
+    var yaw = pose.orientation.yaw
     
     pos_stig.foreach(function(key, data, robot_id) {
         if(robot_id != id) {
             var dx = cx - data.x
             var dy = cy - data.y
             var dist = math.sqrt(dx*dx + dy*dy)
+            
             if(dist < ROBOT_AVOID_DIST and dist > 0.01) {
                 var strength = (ROBOT_AVOID_DIST - dist) / ROBOT_AVOID_DIST
-                rep = math.vec2.add(rep, math.vec2.new(dx * strength, dy * strength))
+                var global_angle = math.atan(dy, dx)
+                var local_angle = global_angle - yaw
+                rep = math.vec2.add(rep, math.vec2.newp(strength, local_angle))
             }
         }
     })
@@ -242,10 +250,16 @@ function step() {
         motion = math.vec2.norm(motion)
     }
     
-    set_wheels(
-        (motion.x - motion.y) * MAX_SPEED,
-        (motion.x + motion.y) * MAX_SPEED
-    )
+    var heading_angle = math.atan(motion.y, motion.x)
+    
+    var v = MAX_SPEED * math.cos(heading_angle)
+    var w = MAX_SPEED * math.sin(heading_angle)
+    
+    if (v < 0.0) {
+        v = v * 0.5 
+    }
+    
+    set_wheels(v - w, v + w)
     
     log_map()
 }
