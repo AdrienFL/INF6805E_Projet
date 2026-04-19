@@ -1,0 +1,261 @@
+include "vec2.bzz"
+
+TARGET_X = 4.5 
+TARGET_Y = -4.5  
+MAX_SPEED   = 20.0
+OBS_THRESH  = 0.05
+GOAL_THRESH = 0.15
+W_ACT       = 6.0   
+W_OBS       = 8.0
+EVAP        = 0.7  
+prev_x           = 0.0
+prev_y           = 0.0
+stuck_count      = 0
+STUCK_THRESH     = 6     
+STUCK_DIST       = 0.05    
+W_ESCAPE         = 6.0
+escape_angle     = 0.0
+escaping         = 0
+ESCAPE_STEPS     = 40
+escape_count     = 0
+WARMUP_STEPS     = 30
+CHECK_INTERVAL   = 30    
+prev_initialized = 0
+self_x       = 0.0
+self_y       = 0.0
+self_yaw     = 0.0
+arrived      = 0
+my_pheromone = 0.0
+best_phi     = 0.0
+best_angle   = 0.0
+
+function init() {
+    arrived          = 0
+    my_pheromone     = 0.0
+    best_phi         = 0.0
+    best_angle       = 0.0
+    step_count       = 0
+    stuck_count      = 0
+    escaping         = 0
+    escape_count     = 0
+    prev_initialized = 0 
+}
+
+
+function reset() {
+    arrived      = 0
+    my_pheromone = 0.0
+}
+
+function destroy() {}
+
+function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y))
+    log(log_str)
+
+    if (arrived == 1) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    # Check if stuck every step
+    check_stuck()
+
+    self_x   = pose.position.x
+    self_y   = pose.position.y
+    self_yaw = pose.orientation.yaw
+
+    var dx   = TARGET_X - self_x
+    var dy   = TARGET_Y - self_y
+    var dist = math.sqrt(dx * dx + dy * dy)
+
+    if (dist < GOAL_THRESH) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    my_pheromone = EVAP * my_pheromone + (1.0 - EVAP) * (1.0 / dist)
+    neighbors.broadcast("phi", my_pheromone)
+
+    best_phi   = 0.0
+    best_angle = 0.0
+    neighbors.foreach(function(rid, data) {
+        neighbors.listen("phi", function(rid2, val, src) {
+            if (rid2 == rid) {
+                if (val > best_phi) {
+                    best_phi   = val
+                    best_angle = data.azimuth
+                }
+            }
+        })
+    })
+
+    var f_obs = repulsion_force()
+
+    # If escaping, override normal navigation with escape force
+    if (escaping == 1) {
+        escape_count = escape_count + 1
+        if (escape_count >= ESCAPE_STEPS) {
+            escaping     = 0
+            escape_count = 0
+        }
+        var f_esc = math.vec2.newp(W_ESCAPE, escape_angle)
+        var total = math.vec2.new(
+            f_obs.x + f_esc.x,
+            f_obs.y + f_esc.y
+        )
+        apply_force(total)
+        return
+    }
+
+    var f_aco = aco_force()
+    var total = math.vec2.new(
+        f_obs.x + f_aco.x,
+        f_obs.y + f_aco.y
+    )
+    apply_force(total)
+}
+
+
+function aco_force() {
+    if (best_phi > my_pheromone) {
+
+        var confidence = (best_phi - my_pheromone) / best_phi
+        var mag = W_ACT * (0.5 + 0.5 * confidence)
+        return math.vec2.newp(mag, best_angle)
+    }
+
+   
+    var dx_w  = TARGET_X - self_x
+    var dy_w  = TARGET_Y - self_y
+    var dist  = math.sqrt(dx_w * dx_w + dy_w * dy_w)
+    if (dist < GOAL_THRESH) {
+        arrived = 1
+        return math.vec2.new(0.0, 0.0)
+    }
+    var world = math.vec2.new(dx_w / dist, dy_w / dist)
+    var body  = math.vec2.rotate(world, 0.0 - self_yaw)
+    return math.vec2.scale(body, W_ACT)
+}
+function repulsion_force() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var mag = W_OBS * s.value * s.value
+            rep = math.vec2.add(rep, math.vec2.newp(-mag, s.angle))
+        }
+        i = i + 1
+    }
+    return rep
+}
+function check_stuck() {
+    if (prev_initialized == 0) {
+        prev_x = pose.position.x
+        prev_y = pose.position.y
+        prev_initialized = 1
+        return
+    }
+
+    if (step_count < WARMUP_STEPS) {
+        return
+    }
+
+    if (step_count % CHECK_INTERVAL != 0) {
+        return
+    }
+
+    var dx    = pose.position.x - prev_x
+    var dy    = pose.position.y - prev_y
+    var moved = math.sqrt(dx * dx + dy * dy)
+
+    prev_x = pose.position.x
+    prev_y = pose.position.y
+
+    if (moved < STUCK_DIST) {
+        stuck_count = stuck_count + 1
+    } else {
+        stuck_count  = 0
+        escaping     = 0
+        escape_count = 0
+    }
+
+    if (stuck_count >= STUCK_THRESH) {
+        stuck_count  = 0
+        escaping     = 1
+        escape_count = 0
+        escape_angle = escape_direction()
+    }
+}
+
+function escape_direction() {
+    var best_angle = 0.0
+    var best_clear = -1.0
+
+    var k = 0
+    while (k < 8) {
+        var candidate = (k * math.pi * 2.0) / 8.0
+        var clearance = 1.0   # start assuming clear
+
+        var i = 0
+        while (i < 8) {
+            var s = proximity[i]
+            if (s.value > OBS_THRESH) {
+                var diff = candidate - s.angle
+                # Wrap angle difference to [-pi, pi]
+                while (diff >  math.pi) { diff = diff - 2.0 * math.pi }
+                while (diff < -math.pi) { diff = diff + 2.0 * math.pi }
+                if (diff < 0.0) { diff = 0.0 - diff }
+                # Subtract obstacle influence based on proximity and angle alignment
+                if (diff < math.pi / 2.0) {
+                    clearance = clearance - s.value * (1.0 - diff / (math.pi / 2.0))
+                }
+            }
+            i = i + 1
+        }
+
+        if (clearance > best_clear) {
+            best_clear = clearance
+            best_angle = candidate
+        }
+        k = k + 1
+    }
+
+    return best_angle
+}
+
+function apply_force(v) {
+    if (math.vec2.length(v) < 0.001) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var obs_pressure = 0.0
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            obs_pressure = obs_pressure + s.value
+        }
+        i = i + 1
+    }
+
+
+    var pressure_factor = math.max(0.3, 1.0 - obs_pressure / 4.0)
+    var effective_max   = MAX_SPEED * pressure_factor
+
+    var angle = math.atan(v.y, v.x)
+    var raw   = math.vec2.length(v)
+    var speed = effective_max * math.min(raw / W_ACT, 1.0)
+
+    var left  = speed * (1.0 - angle / math.pi)
+    var right = speed * (1.0 + angle / math.pi)
+
+    left  = math.min(math.max(left,  -effective_max), effective_max)
+    right = math.min(math.max(right, -effective_max), effective_max)
+
+    set_wheels(left, right)
+}
