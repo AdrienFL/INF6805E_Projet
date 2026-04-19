@@ -4,7 +4,7 @@ MAX_SPEED = 20.0
 GRID_RES = 0.15
 PROX_RANGE = 0.15
 OBSTACLE_AVOID_GAIN = 2.0
-ROBOT_AVOID_DIST = 0.25
+ROBOT_AVOID_DIST = 0.3
 
 map_stig = nil
 cost_stig = nil
@@ -22,10 +22,14 @@ function get_grid_key(x, y) {
 
 function get_cost(nx, ny) {
     var key = get_grid_key(nx, ny)
-    if(map_stig.get(key) == 2) { return 9999 }
+    if(map_stig.get(key) == 2) { 
+        return 9999 
+    }
     
     var c = cost_stig.get(key)
-    if(c != nil) { return c }
+    if(c != nil) { 
+        return c 
+    }
     
     var dx = math.round(math.abs(nx - GLOBAL_TARGET_X) / GRID_RES)
     var dy = math.round(math.abs(ny - GLOBAL_TARGET_Y) / GRID_RES)
@@ -60,10 +64,7 @@ function robot_repulsion() {
             
             if(dist < ROBOT_AVOID_DIST and dist > 0.01) {
                 var strength = (ROBOT_AVOID_DIST - dist) / ROBOT_AVOID_DIST
-                var weight = 1.0
-                if(robot_id > id) { weight = 0.2 }
-                
-                rep = math.vec2.add(rep, math.vec2.new(dx * strength * weight, dy * strength * weight))
+                rep = math.vec2.add(rep, math.vec2.new(dx * strength, dy * strength))
             }
         }
     })
@@ -120,8 +121,11 @@ function step() {
                 var is_robot = 0
                 pos_stig.foreach(function(key, data, robot_id) {
                     if(is_robot == 0 and robot_id != id) {
-                        var dist = math.sqrt((data.x - ox)*(data.x - ox) + (data.y - oy)*(data.y - oy))
-                        if(dist < 0.25) { is_robot = 1 }
+                        var dist = math.sqrt((data.x - ox)*(data.x - ox) + 
+                                           (data.y - oy)*(data.y - oy))
+                        if(dist < 0.25) { 
+                            is_robot = 1 
+                        }
                     }
                 })
                 
@@ -134,7 +138,8 @@ function step() {
         p = p + 1
     }
     
-    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - cx)*(GLOBAL_TARGET_X - cx) + (GLOBAL_TARGET_Y - cy)*(GLOBAL_TARGET_Y - cy))
+    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - cx)*(GLOBAL_TARGET_X - cx) + 
+                               (GLOBAL_TARGET_Y - cy)*(GLOBAL_TARGET_Y - cy))
     if(dist_to_goal < GRID_RES * 2) {
         arrived = 1
         set_wheels(0.0, 0.0)
@@ -147,30 +152,27 @@ function step() {
     neighbors[2] = { .x = cx, .y = cy + GRID_RES }
     neighbors[3] = { .x = cx, .y = cy - GRID_RES }
     
-    var min_cost = 99999.0
+    var min_cost = 9999
     var best_nx = cx
     var best_ny = cy
     var walls = 0
     
     var k = 0
     while(k < 4) {
-        var c = get_cost(neighbors[k].x, neighbors[k].y) * 1.0
+        var c = get_cost(neighbors[k].x, neighbors[k].y)
         
-        if(c >= 9999.0) {
+        if(c >= 9999) {
             walls = walls + 1
         } else {
             pos_stig.foreach(function(r_key, r_data, robot_id) {
                 if(robot_id != id) {
                     var dx = neighbors[k].x - r_data.x
                     var dy = neighbors[k].y - r_data.y
-                    if(math.sqrt(dx*dx + dy*dy) < GRID_RES * 2.5) {
-                        c = c + 15.0
+                    if(math.sqrt(dx*dx + dy*dy) < GRID_RES * 2.0) {
+                        c = c + 4
                     }
                 }
             })
-            if (k == (id % 4)) {
-                c = c - 0.5
-            }
         }
         
         if(c < min_cost) {
@@ -181,8 +183,8 @@ function step() {
         k = k + 1
     }
     
-    var expected_cost = min_cost + 1.0
-    var current_cost = get_cost(cx, cy) * 1.0
+    var expected_cost = min_cost + 1
+    var current_cost = get_cost(cx, cy)
     
     if(walls >= 3) {
         cost_stig.put(my_key, 9999)
@@ -192,7 +194,7 @@ function step() {
     }
     
     var goal_direction = math.vec2.new(0.0, 0.0)
-    if(min_cost < 9999.0) {
+    if(min_cost < 9999) {
         var angle_to_target = math.atan(best_ny - cy, best_nx - cx) - yaw
         goal_direction = math.vec2.newp(1.0, angle_to_target)
     }
