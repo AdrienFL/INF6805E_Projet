@@ -11,7 +11,7 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
     lines.append('''
   <framework>
     <system threads="0"/>
-    <experiment length="0" ticks_per_second="10" random_seed="{}"/>
+    <experiment length="1000" ticks_per_second="10" random_seed="{}"/>
   </framework>'''.format(seed))
 
     lines.append('''
@@ -29,7 +29,7 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
         <positioning         implementation="default" />
         <kheperaiv_light      implementation="rot_z_only" show_rays="false" />
       </sensors>
-        <params>
+        <params bytecode_file="projet.bo" debug_file="projet.bdb">
         <wheel_turning hard_turn_angle_threshold="90"
                        soft_turn_angle_threshold="70"
                        no_turn_angle_threshold="10"
@@ -71,7 +71,7 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
         if i == n_obstacles:
             lines.append(f'''
             <light id="light_1"
-           position="4.5,-4.5,0.3"
+           position="4.5,-4.5,0.7"
            orientation="0,0,0"
            color="yellow"
            intensity="5"
@@ -87,10 +87,10 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
 
 
     lines.append(f'''
-       <distribute>
-      <position method="uniform" min="2,2,0" max="3,3,0" />
+        <distribute>
+      <position method="uniform" min="-5,4,0" max="-4,5,0" />
       <orientation method="gaussian" mean="0,0,0" std_dev="360,0,0" />
-      <entity quantity="{n_robots}" max_trials="100">
+      <entity quantity="10" max_trials="100">
         <kheperaiv id="kiv" rab_data_size="200" rab_range="6">
           <controller config="projet" />
         </kheperaiv>
@@ -125,7 +125,7 @@ def generate_argos(n_obstacles=15, n_robots=10, arena_size=5.0, seed=42):
     return '\n'.join(lines)
 
 if __name__ == '__main__':
-    content = generate_argos(n_obstacles=40, n_robots=10, arena_size=10.0)
+    content = generate_argos(n_obstacles=60, n_robots=10, arena_size=10.0)
     with open('projet.argos', 'w') as f:
         f.write(content)
     print("generated argos file")
