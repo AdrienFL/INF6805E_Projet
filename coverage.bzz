@@ -1,25 +1,30 @@
 include "vec2.bzz"
 
 MAX_SPEED = 20.0
-GRID_RES = 0.3
+GRID_RES = 0.15
+ZONE_RES = 0.45
 PROX_RANGE = 0.5
+ROBOT_AVOID_DIST = 0.3
 
-FRONTIER_WEIGHT = 1.0
-GOAL_WEIGHT = 1.0
-OBSTACLE_AVOID_GAIN = 2.0
-ROBOT_AVOID_DIST = 0.3     
+GLOBAL_TARGET_X = 4.5
+GLOBAL_TARGET_Y = -4.5
 
 map_stig = nil
-target_stig = nil
 pos_stig = nil
+zone_stig = nil
 state = 0
 target_x = 0.0
 target_y = 0.0
 step_count = 0
 arrived = 0
 
-GLOBAL_TARGET_X = 4.5
-GLOBAL_TARGET_Y = -4.5
+function get_grid_key(x, y) {
+    return string.concat(string.tostring(math.round(x / GRID_RES)), ",", string.tostring(math.round(y / GRID_RES)))
+}
+
+function get_zone_key(x, y) {
+    return string.concat(string.tostring(math.round(x / ZONE_RES)), ",", string.tostring(math.round(y / ZONE_RES)))
+}
 
 function obstacle_avoidance() {
     var repulsion = math.vec2.new(0.0, 0.0)
@@ -29,10 +34,8 @@ function obstacle_avoidance() {
         if (reading > 0.0) {
             var rvec = math.vec2.newp(reading, proximity[i].angle)
             rvec = math.vec2.scale(rvec, -1.0)
-            
             var perp = math.vec2.new(-rvec.y, rvec.x)
             rvec = math.vec2.add(rvec, math.vec2.scale(perp, 0.75))
-            
             repulsion = math.vec2.add(repulsion, rvec)
         }
         i = i + 1
@@ -51,7 +54,6 @@ function robot_repulsion() {
             var dx = cx - data.x
             var dy = cy - data.y
             var dist = math.sqrt(dx*dx + dy*dy)
-            
             if(dist < ROBOT_AVOID_DIST and dist > 0.01) {
                 var strength = (ROBOT_AVOID_DIST - dist) / ROBOT_AVOID_DIST
                 var global_angle = math.atan(dy, dx)
@@ -63,69 +65,10 @@ function robot_repulsion() {
     return rep
 }
 
-function find_closest_frontier(cx, cy) {
-    var best_frontier = nil
-    var min_cost = 99999.0
-    var r = 2
-    
-    while(r <= 20) {
-        var theta = 0.0
-        while(theta < 6.28) {
-            var fx = cx + r * GRID_RES * math.cos(theta)
-            var fy = cy + r * GRID_RES * math.sin(theta)
-            var key = get_grid_key(fx, fy)
-            
-            if(map_stig.get(key) == -1) {
-                var claimed = target_stig.get(key)
-                if(claimed == nil or claimed == id) {
-                    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - fx)*(GLOBAL_TARGET_X - fx) + (GLOBAL_TARGET_Y - fy)*(GLOBAL_TARGET_Y - fy))
-                    var dist_to_frontier = r * GRID_RES
-                    
-                    if(check_los(cx, cy, fx, fy) == 1) {
-                        var cost = (dist_to_frontier * FRONTIER_WEIGHT) + (dist_to_goal * GOAL_WEIGHT)
-                        if(cost < min_cost) {
-                            min_cost = cost
-                            best_frontier = { .x = fx, .y = fy, .key = key }
-                        }
-                    }
-                }
-            }
-            theta = theta + 0.785
-        }
-        r = r + 2
-    }
-    
-    if(best_frontier != nil) {
-        target_stig.put(best_frontier.key, id)
-        return best_frontier
-    }
-    return nil
-}
-
-function get_grid_key(x, y) {
-    return string.concat(string.tostring(math.round(x / GRID_RES)), ",", 
-                         string.tostring(math.round(y / GRID_RES)))
-}
-
-function check_los(x1, y1, x2, y2) {
-    var dist = math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
-    var steps = math.ceil(dist / GRID_RES)
-    var i = 1
-    while(i <= steps) {
-        var px = x1 + (x2-x1) * (i/steps)
-        var py = y1 + (y2-y1) * (i/steps)
-        if(map_stig.get(get_grid_key(px, py)) == 2) {
-            return 0
-        }
-        i = i + 1
-    }
-    return 1
-}
-
 function init() {
     map_stig = stigmergy.create(1)
-    target_stig = stigmergy.create(2)
     pos_stig = stigmergy.create(3)
+    zone_stig = stigmergy.create(4)
     state = 0
     step_count = 0
     arrived = 0
@@ -137,46 +80,16 @@ function reset() {
 
 function destroy() {}
 
-function log_map() {
-    if(id == 0 and step_count % 10 == 0) {
-        map_stig.foreach(function(key, data, robot_id) {
-            log(string.concat("MAP,", string.tostring(step_count), ",", key, ",", string.tostring(data)))
-        })
-    }
-}
-
-function step() {
-    step_count = step_count + 1
-    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y), ",", string.tostring(arrived))
-    log(log_str)
-
+function update_map() {
     var cx = pose.position.x
     var cy = pose.position.y
     var yaw = pose.orientation.yaw
-    
-    pos_stig.put(string.tostring(id), { .x = cx, .y = cy })
-    
-    var current_key = get_grid_key(cx, cy)
-    map_stig.put(current_key, 1)
-    
-    var dx = -1
-    while(dx <= 1) {
-        var dy = -1
-        while(dy <= 1) {
-            if(dx != 0 or dy != 0) {
-                var nkey = get_grid_key(cx + dx * GRID_RES, cy + dy * GRID_RES)
-                if(map_stig.get(nkey) == nil) {
-                    map_stig.put(nkey, -1)
-                }
-            }
-            dy = dy + 1
-        }
-        dx = dx + 1
-    }
-    
+    var is_free = 1
     var p = 0
+    
     while(p < 8) {
         if(proximity[p].value > 0.1) {
+            is_free = 0
             var actual_dist = PROX_RANGE * (1.0 - proximity[p].value)
             if(actual_dist < 0.02) { actual_dist = 0.02 }
             
@@ -184,66 +97,91 @@ function step() {
             var oy = cy + math.sin(yaw + proximity[p].angle) * actual_dist
             var obs_key = get_grid_key(ox, oy)
             
-            if(map_stig.get(obs_key) != 1) {
-                var is_robot = 0
-                pos_stig.foreach(function(key, data, robot_id) {
-                    if(is_robot == 0 and robot_id != id) {
-                        var dist = math.sqrt((data.x - ox)*(data.x - ox) + (data.y - oy)*(data.y - oy))
-                        if(dist < 0.25) { is_robot = 1 }
-                    }
-                })
-                
-                if(is_robot == 0) {
-                    map_stig.put(obs_key, 2)  
-                }
+            var current_val = map_stig.get(obs_key)
+            if(current_val == nil) {
+                map_stig.put(obs_key, 2)
             }
         }
         p = p + 1
     }
     
-    var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - cx)*(GLOBAL_TARGET_X - cx) + (GLOBAL_TARGET_Y - cy)*(GLOBAL_TARGET_Y - cy))
-    if(dist_to_goal < GRID_RES * 2) {
+    if(is_free == 1) {
+        map_stig.put(get_grid_key(cx, cy), 1)
+    }
+}
+
+function claim_zone(cx, cy) {
+    var best_zone = nil
+    var min_dist = 99999.0
+    var zx = -3
+    
+    while(zx <= 3) {
+        var zy = -3
+        while(zy <= 3) {
+            var check_x = cx + zx * ZONE_RES
+            var check_y = cy + zy * ZONE_RES
+            var z_key = get_zone_key(check_x, check_y)
+            var z_state = zone_stig.get(z_key)
+            
+            if(z_state == nil) {
+                var dist_to_goal = math.sqrt((GLOBAL_TARGET_X - check_x)*(GLOBAL_TARGET_X - check_x) + (GLOBAL_TARGET_Y - check_y)*(GLOBAL_TARGET_Y - check_y))
+                if(dist_to_goal < min_dist) {
+                    min_dist = dist_to_goal
+                    best_zone = { .x = check_x, .y = check_y, .key = z_key }
+                }
+            }
+            zy = zy + 1
+        }
+        zx = zx + 1
+    }
+    
+    if(best_zone != nil) {
+        zone_stig.put(best_zone.key, id)
+        target_x = best_zone.x
+        target_y = best_zone.y
+        state = 1
+    } else {
         arrived = 1
+    }
+}
+
+function step() {
+    step_count = step_count + 1
+    var cx = pose.position.x
+    var cy = pose.position.y
+    var yaw = pose.orientation.yaw
+    
+    pos_stig.put(string.tostring(id), { .x = cx, .y = cy })
+    
+    update_map()
+    
+    if(state == 0) {
+        claim_zone(cx, cy)
+    }
+    
+    if(arrived == 1) {
         set_wheels(0.0, 0.0)
         return
     }
     
-    var motion = math.vec2.new(0.0, 0.0)
-    var goal_direction = math.vec2.new(0.0, 0.0)
-    
-    if(state == 1) {
-        var target_key = get_grid_key(target_x, target_y)
-        var dist = math.sqrt((target_x - cx)*(target_x - cx) + (target_y - cy)*(target_y - cy))
-        
-        if(dist < GRID_RES or map_stig.get(target_key) == 1 or map_stig.get(target_key) == 2) {
-            state = 0
-            target_stig.put(target_key, nil)
-        } else {
-            var angle_to_target = math.atan(target_y - cy, target_x - cx) - yaw
-            goal_direction = math.vec2.newp(1.0, angle_to_target)
-        }
+    var dist_to_target = math.sqrt((target_x - cx)*(target_x - cx) + (target_y - cy)*(target_y - cy))
+    if(dist_to_target < GRID_RES) {
+        var current_z_key = get_zone_key(target_x, target_y)
+        zone_stig.put(current_z_key, -1)
+        state = 0
+        set_wheels(0.0, 0.0)
+        return
     }
     
-    if(state == 0) {
-        var front = find_closest_frontier(cx, cy)
-        if(front != nil) {
-            state = 1
-            target_x = front.x
-            target_y = front.y
-        } else {
-            var angle_to_goal = math.atan(GLOBAL_TARGET_Y - cy, GLOBAL_TARGET_X - cx) - yaw
-            goal_direction = math.vec2.newp(1.0, angle_to_goal)
-            state = 1
-            target_x = GLOBAL_TARGET_X
-            target_y = GLOBAL_TARGET_Y
-        }
-    }
+    var angle_to_target = math.atan(target_y - cy, target_x - cx) - yaw
+    var goal_direction = math.vec2.newp(1.0, angle_to_target)
     
     var avoid = obstacle_avoidance()
     var robot_rep = robot_repulsion()
     
+    var motion = math.vec2.new(0.0, 0.0)
     motion = math.vec2.add(motion, goal_direction)
-    motion = math.vec2.add(motion, math.vec2.scale(avoid, OBSTACLE_AVOID_GAIN))
+    motion = math.vec2.add(motion, math.vec2.scale(avoid, 2.0))
     motion = math.vec2.add(motion, math.vec2.scale(robot_rep, 1.0))
     
     if(math.vec2.length(motion) > 0.0) {
@@ -251,15 +189,9 @@ function step() {
     }
     
     var heading_angle = math.atan(motion.y, motion.x)
-    
     var v = MAX_SPEED * math.cos(heading_angle)
     var w = MAX_SPEED * math.sin(heading_angle)
     
-    if (v < 0.0) {
-        v = v * 0.5 
-    }
-    
+    if (v < 0.0) { v = v * 0.5 }
     set_wheels(v - w, v + w)
-    
-    log_map()
 }
