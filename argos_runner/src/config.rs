@@ -51,6 +51,7 @@ pub(crate) struct ArenaConfig {
 pub(crate) struct RunConfig {
     pub(crate) length: u32,
     pub(crate) ticks_per_second: u32,
+    pub(crate) total_ticks: u32,
     pub(crate) robots: u32,
     pub(crate) arena_size: f64,
     pub(crate) seed: u32,

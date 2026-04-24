@@ -40,7 +40,13 @@ fn sample_f64(rng: &mut impl Rng, var: &VarF64) -> f64 {
     }
 }
 
-fn execute_run(run_config: &RunConfig, run_idx: usize, ansi_regex: &Regex, output_dir: &str) {
+fn execute_run(
+    run_config: &RunConfig,
+    run_idx: usize,
+    ansi_regex: &Regex,
+    output_dir: &str,
+    pb: ProgressBar,
+) {
     let run_dir = PathBuf::from(output_dir).join(format!("run_{}", run_idx));
     fs::create_dir_all(&run_dir).unwrap();
 
@@ -67,15 +73,33 @@ fn execute_run(run_config: &RunConfig, run_idx: usize, ansi_regex: &Regex, outpu
     let mut map_file = File::create(run_dir.join("experiment_map.csv")).unwrap();
     let mut data_file = File::create(run_dir.join("experiment_data.csv")).unwrap();
 
+    let mut last_tick: u64 = 0;
+    let mut local_tick_accum: u64 = 0;
+
     let mut process_line = |line: String| {
         if line.contains("BUZZ:") {
             let clean_line = ansi_regex.replace_all(&line, "");
             if let Some(idx) = clean_line.find("BUZZ:") {
                 let content = &clean_line[idx + 5..];
                 let no_spaces: String = content.chars().filter(|c| !c.is_whitespace()).collect();
+
                 if no_spaces.starts_with("MAP,") {
                     writeln!(map_file, "{}", no_spaces).unwrap();
                 } else if !no_spaces.is_empty() {
+                    let parts: Vec<&str> = no_spaces.split(',').collect();
+                    if parts.len() >= 2 {
+                        if let Ok(tick) = parts[1].parse::<u64>() {
+                            if tick > last_tick && tick <= run_config.total_ticks as u64 {
+                                local_tick_accum += tick - last_tick;
+                                last_tick = tick;
+
+                                if local_tick_accum >= 10 {
+                                    pb.inc(local_tick_accum);
+                                    local_tick_accum = 0;
+                                }
+                            }
+                        }
+                    }
                     writeln!(data_file, "{}", no_spaces).unwrap();
                 }
             }
@@ -95,6 +119,14 @@ fn execute_run(run_config: &RunConfig, run_idx: usize, ansi_regex: &Regex, outpu
     if !res.success() {
         error!("Run {} failed: {}\n{}", run_idx, res, err_output);
     }
+
+    if local_tick_accum > 0 {
+        pb.inc(local_tick_accum);
+    }
+
+    if (run_config.length as u64) > last_tick {
+        pb.inc((run_config.length as u64) - last_tick);
+    }
 }
 
 fn main() {
@@ -113,10 +145,17 @@ fn main() {
     let mut rng = rand::rng();
 
     let mut run_configs = Vec::with_capacity(config.runner.runs);
+    let mut global_total_ticks: u64 = 0;
+
     for _ in 0..config.runner.runs {
+        let ticks_per_second = config.experiment.ticks_per_second;
+        let length = config.experiment.length;
+        let total_ticks = length * ticks_per_second;
+        global_total_ticks += total_ticks as u64;
         run_configs.push(RunConfig {
-            length: config.experiment.length,
-            ticks_per_second: config.experiment.ticks_per_second,
+            length,
+            ticks_per_second,
+            total_ticks,
             robots: sample_u32(&mut rng, &config.experiment.robots),
             arena_size: sample_f64(&mut rng, &config.experiment.arena_size),
             seed: sample_u32(&mut rng, &config.experiment.seed),
@@ -127,22 +166,28 @@ fn main() {
         });
     }
 
-    let pb = ProgressBar::new(config.runner.runs as u64);
+    let pb = ProgressBar::new(global_total_ticks);
     pb.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} runs ({eta})",
-            )
-            .unwrap()
-            .progress_chars("#>-"),
-    );
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ticks ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+    pb.tick();
 
     run_configs
         .into_par_iter()
         .enumerate()
         .for_each(|(i, run_config)| {
-            execute_run(&run_config, i, &ansi_regex, &config.runner.output_dir);
-            pb.inc(1);
+            execute_run(
+                &run_config,
+                i,
+                &ansi_regex,
+                &config.runner.output_dir,
+                pb.clone(),
+            );
         });
 
     pb.finish_with_message("All experiments completed.");

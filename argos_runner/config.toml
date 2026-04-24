@@ -1,10 +1,10 @@
 [runner]
-runs = 4
-parallel_jobs = 4
+runs = 20
+parallel_jobs = 16
 output_dir = "results"
 
 [experiment]
-length = 1000
+length = 200
 ticks_per_second = 10
 
 [experiment.robots]
