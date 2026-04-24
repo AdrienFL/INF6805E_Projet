@@ -16,7 +16,7 @@ mod argos;
 mod config;
 
 use crate::{
-    argos::generate_argos_xml,
+    argos::generate_argos_data,
     config::{Config, RunConfig, VarF64, VarU32},
 };
 
@@ -54,9 +54,14 @@ fn execute_run(
     let json_content = serde_json::to_string_pretty(run_config).unwrap();
     fs::write(&json_file, json_content).unwrap();
 
+    let (xml_content, arena_info) = generate_argos_data(run_config);
+
     let argos_file = run_dir.join("projet.argos");
-    let xml_content = generate_argos_xml(run_config);
     fs::write(&argos_file, xml_content).unwrap();
+
+    let arena_json_file = run_dir.join("arena.json");
+    let arena_json_content = serde_json::to_string_pretty(&arena_info).unwrap();
+    fs::write(&arena_json_file, arena_json_content).unwrap();
 
     let mut child = Command::new("argos3")
         .arg("-z")

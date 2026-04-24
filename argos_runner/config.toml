@@ -4,8 +4,8 @@ parallel_jobs = 12
 output_dir = "results"
 
 [experiment]
-algorithms = ["projet"]
-length = 1000
+algorithms = ["projet", "coverage", "aco", "pso"]
+length = 10
 ticks_per_second = 10
 
 [experiment.robots]
@@ -23,7 +23,7 @@ min = 1
 max = 100000
 
 [arena]
-arena_type = ["scatter", "maze"]
+arena_type = ["scatter"]
 
 [arena.maze_width]
 type = "Fixed"

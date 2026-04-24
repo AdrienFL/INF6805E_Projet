@@ -1,0 +1,184 @@
+include "vec2.bzz"
+
+# Paramètres PSO
+W_INERTIA    = 0.7
+W_COGNITIVE  = 10.5
+W_SOCIAL     = 2.5
+LIGHT_THRESH = 2      
+MAX_SPEED    = 5.0
+MAX_VEL      = 2.0
+
+
+vel_x         = 0.0
+vel_y         = 0.0
+pbest_x       = 0.0
+pbest_y       = 0.0
+pbest_fitness = 0.0
+gbest_x       = 0.0
+gbest_y       = 0.0
+gbest_fitness = 0.0
+arrived       = 0
+
+step_count = 0
+
+
+function sum_light(rid, data, accum) {
+    var lvec = math.vec2.newp(data.value, data.angle)
+    accum.vector = math.vec2.add(lvec, accum.vector)
+    if (data.value != 0) {
+        accum.number = accum.number + 1
+    }
+    accum.total = accum.total + data.value
+    return accum
+}
+
+function read_light() {
+    return reduce(light, sum_light, {
+        .number = 0, 
+        .total = 0.0, 
+        .vector = math.vec2.new(0.0, 0.0)
+    })
+}
+
+
+function obstacle_avoidance() {
+    var repulsion = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var reading = proximity[i].value
+        if (reading > 0.0) {
+            var rvec = math.vec2.newp(reading, proximity[i].angle)
+            rvec = math.vec2.scale(rvec, -1.0)
+            repulsion = math.vec2.add(repulsion, rvec)
+        }
+        i = i + 1
+    }
+    return repulsion
+}
+
+
+function init() {
+    arrived       = 0
+    vel_x         = math.rng.uniform(-1.0, 1.0)
+    vel_y         = math.rng.uniform(-1.0, 1.0)
+    pbest_x       = pose.position.x
+    pbest_y       = pose.position.y
+    pbest_fitness = -1.0
+    gbest_x       = 4.5
+    gbest_y       = -4.5
+    gbest_fitness = 0.0
+}
+
+function reset() {
+    init()
+    step_count = 0
+}
+
+function destroy() {}
+
+
+function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y), ",", string.tostring(arrived))
+    log(log_str)
+
+    if (arrived == 1) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var cx    = pose.position.x
+    var cy    = pose.position.y
+    var ldata = read_light()
+    var cf = ldata.total
+
+    if (cf > LIGHT_THRESH) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    if (cf > pbest_fitness) {
+        pbest_fitness = cf
+        pbest_x = cx
+        pbest_y = cy
+    }
+
+    neighbors.broadcast("pbx", pbest_x)
+    neighbors.broadcast("pby", pbest_y)
+    neighbors.broadcast("pbf", pbest_fitness)
+
+    var nb = {}
+    neighbors.listen("pbf", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = val, .x = 0.0, .y = 0.0} }
+        else { nb[rid].f = val }
+    })
+    neighbors.listen("pbx", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = 0.0, .x = val, .y = 0.0} }
+        else { nb[rid].x = val }
+    })
+    neighbors.listen("pby", function(rid, val, robot_id) {
+        if (nb[rid] == nil) { nb[rid] = {.f = 0.0, .x = 0.0, .y = val} }
+        else { nb[rid].y = val }
+    })
+
+    if (pbest_fitness > gbest_fitness) {
+        gbest_fitness = pbest_fitness
+        # gbest_x = pbest_x
+        # gbest_y = pbest_y
+    }
+    foreach(nb, function(rid, data) {
+        if (data.f > gbest_fitness) {
+            gbest_fitness = data.f
+            # gbest_x = data.x
+            # gbest_y = data.y
+        }
+    })
+
+    var motion = math.vec2.new(0.0, 0.0)
+    var avoid  = obstacle_avoidance()
+
+    if (math.vec2.length(ldata.vector) > 0.0) {
+        # Quand la light est visible, on y va directement
+        var light_dir = math.vec2.norm(ldata.vector)
+        motion = math.vec2.add(
+            math.vec2.scale(light_dir, 1.0),
+            math.vec2.scale(avoid,     1.5)
+        )
+    } else {
+        # Pas de lumière visible : PSO pur
+        # v = w*v + c1*r1*(pbest - pos) + c2*r2*(gbest - pos)
+        var r1x = math.rng.uniform(0.0, 1.0)
+        var r1y = math.rng.uniform(0.0, 1.0)
+        var r2x = math.rng.uniform(0.0, 1.0)
+        var r2y = math.rng.uniform(0.0, 1.0)
+
+        vel_x = W_INERTIA * vel_x
+            + W_COGNITIVE * r1x * (pbest_x - cx)
+            + W_SOCIAL    * r2x * (gbest_x - cx)
+
+        vel_y = W_INERTIA * vel_y
+            + W_COGNITIVE * r1y * (pbest_y - cy)
+            + W_SOCIAL    * r2y * (gbest_y - cy)
+
+        var vmag = math.sqrt(vel_x * vel_x + vel_y * vel_y)
+        if (vmag > MAX_VEL) {
+            vel_x = vel_x * MAX_VEL / vmag
+            vel_y = vel_y * MAX_VEL / vmag
+        }
+
+        var yaw  = pose.orientation.yaw
+        var vx_b =  vel_x * math.cos(yaw) + vel_y * math.sin(yaw)
+        var vy_b = -vel_x * math.sin(yaw) + vel_y * math.cos(yaw)
+        motion = math.vec2.add(math.vec2.new(vx_b, vy_b), math.vec2.scale(avoid, 1.5))
+    }
+
+    if (math.vec2.length(motion) > 0.0) {
+        motion = math.vec2.norm(motion)
+    }
+
+    set_wheels(
+        (motion.x - motion.y) * MAX_SPEED,
+        (motion.x + motion.y) * MAX_SPEED
+    )
+}

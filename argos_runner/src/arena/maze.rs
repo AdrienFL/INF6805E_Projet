@@ -1,5 +1,7 @@
 use rand::seq::SliceRandom;
 
+use crate::config::WallInfo;
+
 #[derive(Clone)]
 struct Cell {
     n: bool,
@@ -7,7 +9,7 @@ struct Cell {
     visited: bool,
 }
 
-pub fn generate_maze(width: usize, height: usize, arena_size: f64) -> String {
+pub fn generate_maze(width: usize, height: usize, arena_size: f64) -> Vec<WallInfo> {
     let mut grid = vec![
         vec![
             Cell {
@@ -25,7 +27,7 @@ pub fn generate_maze(width: usize, height: usize, arena_size: f64) -> String {
     let cell_w = arena_size / width as f64;
     let cell_h = arena_size / height as f64;
     let wall_thickness = 0.1;
-    let mut xml = Vec::new();
+    let mut walls = Vec::new();
     let mut obs_idx = 0;
 
     for y in 0..height {
@@ -34,30 +36,31 @@ pub fn generate_maze(width: usize, height: usize, arena_size: f64) -> String {
             let cy = arena_size / 2.0 - (y as f64 * cell_h) - (cell_h / 2.0);
 
             if grid[y][x].n && y != 0 {
-                xml.push(format!(
-                    r#"<box id="maze_n_{}" size="{},{},0.5" movable="false"><body position="{},{},0" orientation="0,0,0"/></box>"#,
-                    obs_idx,
-                    cell_w + wall_thickness,
-                    wall_thickness,
-                    cx,
-                    cy + cell_h / 2.0
-                ));
+                walls.push(WallInfo {
+                    id: format!("maze_n_{}", obs_idx),
+                    x: cx,
+                    y: cy + cell_h / 2.0,
+                    sx: cell_w + wall_thickness,
+                    sy: wall_thickness,
+                    yaw: 0.0,
+                });
                 obs_idx += 1;
             }
             if grid[y][x].w && x != 0 {
-                xml.push(format!(
-                    r#"<box id="maze_w_{}" size="{},{},0.5" movable="false"><body position="{},{},0" orientation="0,0,0"/></box>"#,
-                    obs_idx,
-                    wall_thickness,
-                    cell_h + wall_thickness,
-                    cx - cell_w / 2.0,
-                    cy
-                ));
+                walls.push(WallInfo {
+                    id: format!("maze_w_{}", obs_idx),
+                    x: cx - cell_w / 2.0,
+                    y: cy,
+                    sx: wall_thickness,
+                    sy: cell_h + wall_thickness,
+                    yaw: 0.0,
+                });
                 obs_idx += 1;
             }
         }
     }
-    xml.join("\n")
+
+    walls
 }
 
 fn carve_passages(cx: i32, cy: i32, grid: &mut Vec<Vec<Cell>>, width: usize, height: usize) {

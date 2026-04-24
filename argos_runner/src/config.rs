@@ -62,6 +62,39 @@ pub struct ArenaConfig {
 }
 
 #[derive(Serialize)]
+pub struct ArenaInfo {
+    pub walls: Vec<WallInfo>,
+    pub target: TargetInfo,
+    pub start: StartInfo,
+}
+
+#[derive(Serialize, Clone)]
+pub struct WallInfo {
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub sx: f64,
+    pub sy: f64,
+    pub yaw: f64,
+}
+
+#[derive(Serialize)]
+pub struct TargetInfo {
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub color: String,
+}
+
+#[derive(Serialize)]
+pub struct StartInfo {
+    pub min_x: f64,
+    pub min_y: f64,
+    pub max_x: f64,
+    pub max_y: f64,
+}
+
+#[derive(Serialize)]
 pub struct RunConfig {
     pub algorithm: String,
     pub length: u32,
