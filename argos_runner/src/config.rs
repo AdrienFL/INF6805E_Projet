@@ -1,62 +1,76 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 #[serde(tag = "type")]
-pub(crate) enum VarU32 {
+pub enum VarU32 {
     Fixed { value: u32 },
     Uniform { min: u32, max: u32 },
     Normal { mean: f64, std_dev: f64 },
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 #[serde(tag = "type")]
-pub(crate) enum VarF64 {
+pub enum VarF64 {
     Fixed { value: f64 },
     Uniform { min: f64, max: f64 },
     Normal { mean: f64, std_dev: f64 },
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub(crate) struct Config {
-    pub(crate) runner: RunnerConfig,
-    pub(crate) experiment: ExperimentConfig,
-    pub(crate) arena: ArenaConfig,
+#[derive(Deserialize, Clone)]
+pub struct RangeU32 {
+    pub min: u32,
+    pub max: u32,
+    pub step: u32,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub(crate) struct RunnerConfig {
-    pub(crate) runs: usize,
-    pub(crate) parallel_jobs: usize,
-    pub(crate) output_dir: String,
+impl RangeU32 {
+    pub fn iter(&self) -> impl Iterator<Item = u32> {
+        (self.min..=self.max).step_by(self.step as usize)
+    }
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub(crate) struct ExperimentConfig {
-    pub(crate) length: u32,
-    pub(crate) ticks_per_second: u32,
-    pub(crate) robots: VarU32,
-    pub(crate) arena_size: VarF64,
-    pub(crate) seed: VarU32,
+#[derive(Deserialize, Clone)]
+pub struct Config {
+    pub runner: RunnerConfig,
+    pub experiment: ExperimentConfig,
+    pub arena: ArenaConfig,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub(crate) struct ArenaConfig {
-    pub(crate) arena_type: Vec<String>,
-    pub(crate) maze_width: VarU32,
-    pub(crate) maze_height: VarU32,
-    pub(crate) scatter_obstacles: VarU32,
+#[derive(Deserialize, Clone)]
+pub struct RunnerConfig {
+    pub runs_per_config: usize,
+    pub parallel_jobs: usize,
+    pub output_dir: String,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct RunConfig {
-    pub(crate) length: u32,
-    pub(crate) ticks_per_second: u32,
-    pub(crate) total_ticks: u32,
-    pub(crate) robots: u32,
-    pub(crate) arena_size: f64,
-    pub(crate) seed: u32,
-    pub(crate) arena_type: String,
-    pub(crate) maze_width: usize,
-    pub(crate) maze_height: usize,
-    pub(crate) scatter_obstacles: usize,
+#[derive(Deserialize, Clone)]
+pub struct ExperimentConfig {
+    pub algorithms: Vec<String>,
+    pub length: u32,
+    pub ticks_per_second: u32,
+    pub robots: RangeU32,
+    pub arena_size: VarF64,
+    pub seed: VarU32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct ArenaConfig {
+    pub arena_type: Vec<String>,
+    pub maze_width: VarU32,
+    pub maze_height: VarU32,
+    pub scatter_obstacles: VarU32,
+}
+
+#[derive(Serialize)]
+pub struct RunConfig {
+    pub algorithm: String,
+    pub length: u32,
+    pub ticks_per_second: u32,
+    pub robots: u32,
+    pub arena_size: f64,
+    pub seed: u32,
+    pub arena_type: String,
+    pub maze_width: usize,
+    pub maze_height: usize,
+    pub scatter_obstacles: usize,
 }

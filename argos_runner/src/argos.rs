@@ -31,7 +31,7 @@ pub fn generate_argos_xml(config: &RunConfig) -> String {
         <positioning implementation="default" />
         <kheperaiv_light implementation="rot_z_only" show_rays="false" />
       </sensors>
-      <params bytecode_file="scripts/projet/projet.bo" debug_file="scripts/projet/projet.bdb">
+      <params bytecode_file="scripts/{algo}/{algo}.bo" debug_file="scripts/{algo}/{algo}.bdb">
         <wheel_turning hard_turn_angle_threshold="90" soft_turn_angle_threshold="70" no_turn_angle_threshold="10" max_speed="10" />
       </params>
     </buzz_controller_kheperaiv>
@@ -70,6 +70,7 @@ pub fn generate_argos_xml(config: &RunConfig) -> String {
         config.arena_size,
         half,
         inner_obstacles,
-        config.robots
+        config.robots,
+        algo = config.algorithm
     )
 }

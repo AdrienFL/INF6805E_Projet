@@ -1,6 +1,6 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
-use rand::{Rng, seq::IndexedRandom as _};
+use rand::Rng;
 use rand_distr::{Distribution, Normal, Uniform};
 use rayon::prelude::*;
 use regex::Regex;
@@ -89,11 +89,11 @@ fn execute_run(
                     let parts: Vec<&str> = no_spaces.split(',').collect();
                     if parts.len() >= 2 {
                         if let Ok(tick) = parts[1].parse::<u64>() {
-                            if tick > last_tick && tick <= run_config.total_ticks as u64 {
+                            if tick > last_tick && tick <= run_config.length as u64 {
                                 local_tick_accum += tick - last_tick;
                                 last_tick = tick;
 
-                                if local_tick_accum >= 10 {
+                                if local_tick_accum >= 50 {
                                     pb.inc(local_tick_accum);
                                     local_tick_accum = 0;
                                 }
@@ -112,8 +112,8 @@ fn execute_run(
     }
 
     let mut err_reader = BufReader::new(stderr);
-
     let res = child.wait().unwrap();
+
     let mut err_output = String::new();
     err_reader.read_to_string(&mut err_output).unwrap();
     if !res.success() {
@@ -144,37 +144,43 @@ fn main() {
     let ansi_regex = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
     let mut rng = rand::rng();
 
-    let mut run_configs = Vec::with_capacity(config.runner.runs);
-    let mut global_total_ticks: u64 = 0;
+    let mut run_configs = Vec::new();
+    let mut total_ticks: u64 = 0;
 
-    for _ in 0..config.runner.runs {
-        let ticks_per_second = config.experiment.ticks_per_second;
-        let length = config.experiment.length;
-        let total_ticks = length * ticks_per_second;
-        global_total_ticks += total_ticks as u64;
-        run_configs.push(RunConfig {
-            length,
-            ticks_per_second,
-            total_ticks,
-            robots: sample_u32(&mut rng, &config.experiment.robots),
-            arena_size: sample_f64(&mut rng, &config.experiment.arena_size),
-            seed: sample_u32(&mut rng, &config.experiment.seed),
-            arena_type: config.arena.arena_type.choose(&mut rng).unwrap().clone(),
-            maze_width: sample_u32(&mut rng, &config.arena.maze_width) as usize,
-            maze_height: sample_u32(&mut rng, &config.arena.maze_height) as usize,
-            scatter_obstacles: sample_u32(&mut rng, &config.arena.scatter_obstacles) as usize,
-        });
+    for algorithm in &config.experiment.algorithms {
+        for arena_type in &config.arena.arena_type {
+            for robots in config.experiment.robots.iter() {
+                for _ in 0..config.runner.runs_per_config {
+                    let length = config.experiment.length;
+                    total_ticks += length as u64;
+
+                    run_configs.push(RunConfig {
+                        algorithm: algorithm.clone(),
+                        length,
+                        ticks_per_second: config.experiment.ticks_per_second,
+                        robots,
+                        arena_size: sample_f64(&mut rng, &config.experiment.arena_size),
+                        seed: sample_u32(&mut rng, &config.experiment.seed),
+                        arena_type: arena_type.clone(),
+                        maze_width: sample_u32(&mut rng, &config.arena.maze_width) as usize,
+                        maze_height: sample_u32(&mut rng, &config.arena.maze_height) as usize,
+                        scatter_obstacles: sample_u32(&mut rng, &config.arena.scatter_obstacles)
+                            as usize,
+                    });
+                }
+            }
+        }
     }
 
-    let pb = ProgressBar::new(global_total_ticks);
+    let pb = ProgressBar::new(total_ticks);
     pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ticks ({eta})",
-                )
-                .unwrap()
-                .progress_chars("#>-"),
-        );
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ticks ({eta})",
+            )
+            .unwrap()
+            .progress_chars("#>-"),
+    );
     pb.tick();
 
     run_configs

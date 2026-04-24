@@ -1,16 +1,17 @@
 [runner]
-runs = 20
-parallel_jobs = 16
+runs_per_config = 10
+parallel_jobs = 12
 output_dir = "results"
 
 [experiment]
-length = 200
+algorithms = ["projet"]
+length = 1000
 ticks_per_second = 10
 
 [experiment.robots]
-type = "Uniform"
 min = 5
-max = 15
+max = 20
+step = 5
 
 [experiment.arena_size]
 type = "Fixed"
@@ -33,6 +34,6 @@ type = "Fixed"
 value = 10
 
 [arena.scatter_obstacles]
-type = "Normal"
-mean = 30.0
-std_dev = 5.0
+type = "Uniform"
+min = 10
+max = 50
