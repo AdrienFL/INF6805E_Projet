@@ -1,17 +1,38 @@
 [runner]
-runs = 2
-parallel_jobs = 2
-base_seed = 42
+runs = 4
+parallel_jobs = 4
 output_dir = "results"
 
 [experiment]
 length = 1000
 ticks_per_second = 10
-robots = 10
-arena_size = 10.0
+
+[experiment.robots]
+type = "Uniform"
+min = 5
+max = 15
+
+[experiment.arena_size]
+type = "Fixed"
+value = 10
+
+[experiment.seed]
+type = "Uniform"
+min = 1
+max = 100000
 
 [arena]
-type = "maze"
-maze_width = 10
-maze_height = 10
-scatter_obstacles = 30
+arena_type = ["scatter", "maze"]
+
+[arena.maze_width]
+type = "Fixed"
+value = 10
+
+[arena.maze_height]
+type = "Fixed"
+value = 10
+
+[arena.scatter_obstacles]
+type = "Normal"
+mean = 30.0
+std_dev = 5.0

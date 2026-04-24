@@ -1,18 +1,14 @@
 use crate::{
     arena::{maze::generate_maze, scatter::generate_scatter},
-    config::Config,
+    config::RunConfig,
 };
 
-pub fn generate_argos_xml(config: &Config, seed: u32) -> String {
-    let half = config.experiment.arena_size / 2.0;
+pub fn generate_argos_xml(config: &RunConfig) -> String {
+    let half = config.arena_size / 2.0;
 
-    let inner_obstacles = match config.arena.arena_type.as_str() {
-        "maze" => generate_maze(
-            config.arena.maze_width,
-            config.arena.maze_height,
-            config.experiment.arena_size,
-        ),
-        _ => generate_scatter(config.arena.scatter_obstacles, config.experiment.arena_size),
+    let inner_obstacles = match config.arena_type.as_str() {
+        "maze" => generate_maze(config.maze_width, config.maze_height, config.arena_size),
+        _ => generate_scatter(config.scatter_obstacles, config.arena_size),
     };
 
     format!(
@@ -60,20 +56,20 @@ pub fn generate_argos_xml(config: &Config, seed: u32) -> String {
   <physics_engines><dynamics2d id="dyn2d"/></physics_engines>
   <media><led id="leds"/><range_and_bearing id="rab" /></media>
 </argos-configuration>"#,
-        config.experiment.length,
-        config.experiment.ticks_per_second,
-        seed,
-        config.experiment.arena_size,
-        config.experiment.arena_size,
-        config.experiment.arena_size,
+        config.length,
+        config.ticks_per_second,
+        config.seed,
+        config.arena_size,
+        config.arena_size,
+        config.arena_size,
         half,
-        config.experiment.arena_size,
+        config.arena_size,
         half,
-        config.experiment.arena_size,
+        config.arena_size,
         half,
-        config.experiment.arena_size,
+        config.arena_size,
         half,
         inner_obstacles,
-        config.experiment.robots
+        config.robots
     )
 }
