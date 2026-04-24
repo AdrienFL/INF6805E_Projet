@@ -1,0 +1,166 @@
+include "vec2.bzz"
+
+TARGET_X = 4.5 
+TARGET_Y = -4.5  
+W_ATT= 1.5  
+W_OBS = 5.0   
+W_COH = 0.4  
+W_SEP = 2.5   
+OBS_THRESH = 0.05  
+SEP_DIST = 0.5   
+GOAL_THRESH = 0.15  
+MAX_SPEED = 50.0  
+
+arrived = 0
+step_count = 0
+
+function init() {
+    arrived = 0
+    step_count = 0
+}
+
+function reset() {
+    arrived = 0
+}
+
+function destroy() {}
+
+function step() {
+    step_count = step_count + 1
+    var log_str = string.concat(string.tostring(id), ",", string.tostring(step_count), ",", string.tostring(pose.position.x), ",", string.tostring(pose.position.y))
+    log(log_str)
+
+    neighbors.broadcast("arrived", arrived)
+    neighbors.broadcast("px", pose.position.x)
+    neighbors.broadcast("py", pose.position.y)
+
+    if (arrived == 1) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var nb_arrived = count_arrived_neighbors()
+    var nb_total   = 0
+    neighbors.foreach(function(rid, data) {
+        nb_total = nb_total + 1
+    })
+
+    if (nb_total > 0 and nb_arrived >= nb_total / 2) {
+        arrived = 1
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var f_att = attraction_force()
+    var f_obs = repulsion_force()
+    var f_rey = reynolds_force()
+
+    var total = math.vec2.new(
+        f_att.x + f_obs.x + f_rey.x,
+        f_att.y + f_obs.y + f_rey.y
+    )
+
+    apply_force(total)
+}
+
+function count_arrived_neighbors() {
+    var n = 0
+    neighbors.listen("arrived", function(rid, val, robot_id) {
+        if (val == 1) {
+            n = n + 1
+        }
+    })
+    return n
+}
+
+function attraction_force() {
+    var dx_w = TARGET_X - pose.position.x
+    var dy_w = TARGET_Y - pose.position.y
+    var dist = math.sqrt(dx_w * dx_w + dy_w * dy_w)
+
+    if (dist < GOAL_THRESH) {
+        arrived = 1
+        log("Arrived")
+        return math.vec2.new(0.0, 0.0)
+    }
+
+    var yaw     = pose.orientation.yaw
+    var dx_r    = dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
+    var dy_r    = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
+    
+    return math.vec2.new(W_ATT * dx_r / dist, W_ATT * dy_r / dist)
+}
+
+function repulsion_force() {
+    var rep = math.vec2.new(0.0, 0.0)
+    var i = 0
+    while (i < 8) {
+        var s = proximity[i]
+        if (s.value > OBS_THRESH) {
+            var mag = W_OBS * s.value * s.value
+            rep = math.vec2.add(rep, math.vec2.new(
+                -mag * math.cos(s.angle),
+                -mag * math.sin(s.angle)
+            ))
+        }
+        i = i + 1
+    }
+    return rep
+}
+
+function reynolds_force() {
+    var coh   = math.vec2.new(0.0, 0.0)
+    var sep   = math.vec2.new(0.0, 0.0)
+    var count = 0
+
+    var nb_data = {}
+    neighbors.foreach(function(rid, data) {
+        nb_data[rid] = {.distance = data.distance, .azimuth = data.azimuth}
+    })
+
+    neighbors.listen("px", function(rid, val, robot_id) {
+        var dx_w  = val - pose.position.x
+        var world = math.vec2.new(dx_w, 0.0)
+        var body  = math.vec2.rotate(world, -pose.orientation.yaw)
+        coh = math.vec2.add(coh, body)
+        count = count + 1
+    })
+
+    neighbors.listen("py", function(rid, val, robot_id) {
+        var dy_w  = val - pose.position.y
+        var world = math.vec2.new(0.0, dy_w)
+        var body  = math.vec2.rotate(world, -pose.orientation.yaw)
+        coh = math.vec2.add(coh, body)
+    })
+
+    foreach(nb_data, function(rid, data) {
+        if (data.distance < SEP_DIST) {
+            var mag = W_SEP * (SEP_DIST - data.distance) / SEP_DIST
+            sep = math.vec2.add(sep, math.vec2.newp(-mag, data.azimuth))
+        }
+    })
+
+    if (count > 0) {
+        coh = math.vec2.scale(coh, W_COH / count)
+    }
+
+    return math.vec2.add(coh, sep)
+}
+
+function apply_force(v) {
+    if (math.vec2.length(v) < 0.001) {
+        set_wheels(0.0, 0.0)
+        return
+    }
+
+    var angle = math.atan(v.y, v.x)
+    var speed = math.min(math.vec2.length(v), MAX_SPEED)
+
+    var left  = speed * (1.0 - angle / math.pi)
+    var right = speed * (1.0 + angle / math.pi)
+
+    left  = math.min(math.max(left,  -MAX_SPEED), MAX_SPEED)
+    right = math.min(math.max(right, -MAX_SPEED), MAX_SPEED)
+
+    set_wheels(left, right)
+}

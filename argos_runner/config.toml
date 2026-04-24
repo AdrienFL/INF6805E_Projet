@@ -1,0 +1,17 @@
+[runner]
+runs = 2
+parallel_jobs = 2
+base_seed = 42
+output_dir = "results"
+
+[experiment]
+length = 1000
+ticks_per_second = 10
+robots = 10
+arena_size = 10.0
+
+[arena]
+type = "maze"
+maze_width = 10
+maze_height = 10
+scatter_obstacles = 30
