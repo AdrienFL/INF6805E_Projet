@@ -2,10 +2,14 @@ use rand::RngExt as _;
 
 use crate::config::WallInfo;
 
-pub fn generate_scatter(n_obstacles: usize, arena_size: f64) -> Vec<WallInfo> {
+pub fn generate_scatter(
+    obstacles_density: f64,
+    obstacles_size: f64,
+    arena_size: f64,
+) -> Vec<WallInfo> {
     let mut rng = rand::rng();
     let half = arena_size / 2.0;
-    let margin = 0.5;
+    let margin = obstacles_size * 0.75;
     let mut placed: Vec<(f64, f64)> = Vec::new();
     let mut walls = Vec::new();
 
@@ -16,10 +20,16 @@ pub fn generate_scatter(n_obstacles: usize, arena_size: f64) -> Vec<WallInfo> {
 
     let target_x = half - 0.5;
     let target_y = -half + 0.5;
-    let clearance = 0.5;
+    let clearance = 0.5 + margin;
+
+    let arena_area = arena_size * arena_size;
+    let individual_obstacle_area = obstacles_size * obstacles_size;
+    let n_obstacles =
+        ((arena_area * obstacles_density) / individual_obstacle_area).round() as usize;
+    let collision_dist_sq = (obstacles_size * 1.5).powi(2);
 
     for i in 0..n_obstacles {
-        for _ in 0..100 {
+        for _ in 0..1000 {
             let x = rng.random_range((-half + margin)..(half - margin));
             let y = rng.random_range((-half + margin)..(half - margin));
 
@@ -31,21 +41,21 @@ pub fn generate_scatter(n_obstacles: usize, arena_size: f64) -> Vec<WallInfo> {
                 continue;
             }
 
-            if (x - target_x).powi(2) + (y - target_y).powi(2) < 1.0 {
+            if (x - target_x).powi(2) + (y - target_y).powi(2) < (1.0 + margin).powi(2) {
                 continue;
             }
 
             if !placed
                 .iter()
-                .any(|(px, py)| (x - px).powi(2) + (y - py).powi(2) <= 0.4)
+                .any(|(px, py)| (x - px).powi(2) + (y - py).powi(2) <= collision_dist_sq)
             {
                 placed.push((x, y));
                 walls.push(WallInfo {
                     id: format!("obs_{}", i),
                     x,
                     y,
-                    sx: rng.random_range(0.1..0.4),
-                    sy: rng.random_range(0.1..0.4),
+                    sx: rng.random_range((obstacles_size * 0.5)..(obstacles_size * 1.5)),
+                    sy: rng.random_range((obstacles_size * 0.5)..(obstacles_size * 1.5)),
                     yaw: rng.random_range(0.0..360.0),
                 });
                 break;

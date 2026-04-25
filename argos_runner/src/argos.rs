@@ -43,7 +43,11 @@ pub fn generate_argos_data(config: &RunConfig) -> (String, ArenaInfo) {
 
     let inner_walls = match config.arena_type.as_str() {
         "maze" => generate_maze(config.maze_width, config.maze_height, config.arena_size),
-        _ => generate_scatter(config.scatter_obstacles, config.arena_size),
+        _ => generate_scatter(
+            config.scatter_density,
+            config.scatter_size,
+            config.arena_size,
+        ),
     };
     walls.extend(inner_walls);
 

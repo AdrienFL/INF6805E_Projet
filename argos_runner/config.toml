@@ -1,17 +1,17 @@
 [runner]
 runs_per_config = 10
-parallel_jobs = 12
-output_dir = "results"
+parallel_jobs = 10
+output_dir = "results_4"
 
 [experiment]
-algorithms = ["projet", "coverage", "aco", "pso"]
-length = 10
-ticks_per_second = 10
+algorithms = ["projet", "aco", "pso", "coverage", "flood_fill"]
+length = 1
+ticks_per_second = 2
 
 [experiment.robots]
-min = 5
-max = 20
-step = 5
+min = 1
+max = 10
+step = 1
 
 [experiment.arena_size]
 type = "Fixed"
@@ -33,7 +33,13 @@ value = 10
 type = "Fixed"
 value = 10
 
-[arena.scatter_obstacles]
+[arena.scatter_density]
+type = "Power"
+min = 0.0001
+max = 0.9
+power = 1.5
+
+[arena.scatter_size]
 type = "Uniform"
-min = 10
-max = 50
+min = 0.1
+max = 2.0

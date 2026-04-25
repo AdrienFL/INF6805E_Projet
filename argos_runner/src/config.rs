@@ -13,6 +13,7 @@ pub enum VarU32 {
 pub enum VarF64 {
     Fixed { value: f64 },
     Uniform { min: f64, max: f64 },
+    Power { min: f64, max: f64, power: f64 },
     Normal { mean: f64, std_dev: f64 },
 }
 
@@ -58,7 +59,8 @@ pub struct ArenaConfig {
     pub arena_type: Vec<String>,
     pub maze_width: VarU32,
     pub maze_height: VarU32,
-    pub scatter_obstacles: VarU32,
+    pub scatter_density: VarF64,
+    pub scatter_size: VarF64,
 }
 
 #[derive(Serialize)]
@@ -99,11 +101,13 @@ pub struct RunConfig {
     pub algorithm: String,
     pub length: u32,
     pub ticks_per_second: u32,
+    pub total_ticks: u32,
     pub robots: u32,
     pub arena_size: f64,
     pub seed: u32,
     pub arena_type: String,
     pub maze_width: usize,
     pub maze_height: usize,
-    pub scatter_obstacles: usize,
+    pub scatter_size: f64,
+    pub scatter_density: f64,
 }
